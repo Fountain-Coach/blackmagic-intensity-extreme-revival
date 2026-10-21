@@ -38,6 +38,7 @@ Compile **on a supported legacy macOS host with the installed DeckLink API frame
 - **Output connectors**: `0x3a` — HDMI, component, composite and S-Video advertised.
 - **Maximum audio channels**: `2`.
 - **Device busy state**: `0x0` (idle during this query).
+- **Pixel support — 1080p25 and 720p50, both input and output**: 8-bit YUV (`'2vuy'`) is supported (`1`); 10-bit YUV (`'v210'`) is not supported (`0`) in these two modes. All eight read-only `DoesSupportVideoMode` invocations returned API status `S_OK`. This does not establish support or lack of support in other modes.
 
 These values were reported by the installed runtime on the tested hardware. They do not by themselves demonstrate that every connector passes a signal.
 

@@ -21,6 +21,7 @@ typedef uint32_t (*GetModeCode)(void*);
 typedef long (*GetDimension)(void*);
 typedef int32_t (*GetFrameRate)(void*, int64_t*, int64_t*);
 typedef int32_t (*GetAttributeInt)(void*, uint32_t, int64_t*);
+typedef int32_t (*DoesSupportVideoMode)(void*, uint32_t, uint32_t, uint32_t, uint32_t*, void**);
 
 // API interface identifiers, not device registers or firmware bytes.
 static const unsigned char kInputIID[16] = {0xAF,0x22,0x76,0x2B,0xDF,0xAC,0x48,0x46,0xAA,0x79,0xFA,0x88,0x83,0x56,0x09,0x95};
@@ -93,7 +94,19 @@ static void probeInterface(void* device, const char* label, const unsigned char*
                 CFStringGetCString(name, modeLabel, sizeof(modeLabel), kCFStringEncodingUTF8);
                 CFRelease(name);
             }
-            printf("stage=mode interface=%s code=0x%08x width=%ld height=%ld rate=%lld/%lld rate_status=0x%08x name=%s\n", label, (unsigned)code(mode), width(mode), height(mode), (long long)scale, (long long)duration, (unsigned)rateStatus, modeLabel);
+            uint32_t currentMode = code(mode);
+            printf("stage=mode interface=%s code=0x%08x width=%ld height=%ld rate=%lld/%lld rate_status=0x%08x name=%s\n", label, (unsigned)currentMode, width(mode), height(mode), (long long)scale, (long long)duration, (unsigned)rateStatus, modeLabel);
+            if (currentMode == 0x48703235 || currentMode == 0x68703530) {
+                DoesSupportVideoMode check = (DoesSupportVideoMode)table[3];
+                const uint32_t pixels[] = {0x32767579, 0x76323130}; // 8-bit and 10-bit YUV
+                for (uint32_t pixel : pixels) {
+                    uint32_t supported = 0;
+                    void* actualMode = NULL;
+                    int32_t rc = check(iface, currentMode, pixel, 0, &supported, &actualMode);
+                    printf("stage=pixel_support interface=%s mode=0x%08x pixel=0x%08x status=0x%08x support=%u\n", label, currentMode, pixel, (unsigned)rc, supported);
+                    if (actualMode) ((ObjectRelease)(*(void***)actualMode)[2])(actualMode);
+                }
+            }
             ObjectRelease releaseMode = (ObjectRelease)(*(void***)mode)[2];
             releaseMode(mode);
         }
