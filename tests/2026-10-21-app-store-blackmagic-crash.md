@@ -63,6 +63,14 @@ Required acceptance sequence:
 
 Disabling the DAL plug-in may remove system-wide camera/video-device discovery for this Blackmagic product in unrelated applications, even if direct DeckLink API use continues working. This potential impact is why the isolation must be deliberate and reversible.
 
+## Administrator privilege and sandbox test update
+
+The console account belongs to the macOS \`admin\` group. However, read-only authorization checks show \`sudo -n\` requires a password for elevation, which is different from lacking administrator eligibility. The CoreMediaIO parent directory is owned by root, so group membership does not permit unprivileged removal.
+
+A non-invasive process-level attempt using \`sandbox-exec\` to prevent App Store reading \`DeckLinkCMIO.plugin\` was **inconclusive**: App Store immediately failed at \`_libsecinit_setup_app_sandbox\` with \`EXC_BAD_INSTRUCTION\` and \`Could not set sandbox profile data: Operation not permitted\`. The failing Blackmagic code path was not reached. This does *not* count as proof that denying access fixes App Store. No plugin was modified.
+
+A private, self-restoring administrator-only A/B test script has been prepared on the legacy host and passed syntax, exact-file-hash and unprivileged inspection checks. **It has not been run**, because the administrator authorization prompt has not been approved. The script verifies the expected plug-in hash, moves only the DAL plug-in outside its discovery directory, launches the App Store as the console account, observes survival, and restores the plug-in on exit with a trap. It never flashes firmware, unloads the kernel driver, or changes DeckLinkAPI itself. Approval and completed test evidence remain prerequisites for any repair claim.
+
 ## What this does not prove
 
 - It does not establish that the same bug prevents HDMI signal lock (that remains [separate issue #4](https://github.com/Fountain-Coach/blackmagic-intensity-extreme-revival/issues/4)).
