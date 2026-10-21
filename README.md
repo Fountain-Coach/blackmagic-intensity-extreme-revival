@@ -19,6 +19,10 @@ python3 -m simulator.server --host 127.0.0.1 --port 8172
 
 Open `http://127.0.0.1:8172/` on the host. See the [simulator design and API](docs/virtual-video-instrument.md) for trusted LAN access. **No Syphon, Blackmagic SDK or third-party Python dependency** is required. Synthetic frames are visibly marked, and real hardware validation remains separate.
 
+## Legacy driver failure affecting other macOS applications
+
+Our tests exposed a reproducible legacy-Desktop-Video integration defect: opening **App Store 2.2.1 on Sierra** crashes inside Blackmagic's system-wide CoreMediaIO device-discovery plugin and DeckLinkAPI. Blackmagic's hardware helper also crashes at nearly the same time. We have [documented the four matching crash stacks](tests/2026-10-21-app-store-blackmagic-crash.md), the limits of current evidence, and a reversible plugin-isolation experiment. **This is not fixed yet.**
+
 ## What we want to repair
 
 The tested setup includes:
