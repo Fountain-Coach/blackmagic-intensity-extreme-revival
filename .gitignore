@@ -1,0 +1,18 @@
+# Local analysis artifacts never belong in a public repository
+proprietary/
+tools/
+evidence/
+*.kext/
+*.bin
+*.dmg
+*.pkg
+*.zip
+*.img
+*.rom
+*.fw
+*.pcap
+*.pcapng
+.DS_Store
+.env
+*.pem
+*.key
