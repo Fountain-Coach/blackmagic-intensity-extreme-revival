@@ -30,7 +30,7 @@ The tested setup includes:
 - **Comdis/i-tec THUNDERDOCK2** between the capture device and host.
 - **2011 Mac mini**, macOS **10.12.6 Sierra**, with **Desktop Video 10.4** installed.
 
-The device enumerates over Thunderbolt and PCI Express. macOS attaches the Blackmagic driver, including audio-related components. **Our independently written native test can now enumerate the device, discover video formats, and temporarily enable/disable input and output modes.** Media Express's contradictory failure is an application-level symptom to investigate, not proof of broken hardware.
+The device enumerates over Thunderbolt and PCI Express. macOS attaches the Blackmagic driver, including audio-related components. **Our independently written native test can now enumerate the device, discover video formats, and temporarily enable/disable input and output modes.** Following the verified CoreMediaIO isolation, Media Express now launches its interface and acquires a device resource (busy state `0x2`, returning to `0x0` when closed); actual captured frames remain unverified. [Repeatable regression results](tests/2026-10-21-post-isolation-driver-regression.md) distinguish those facts.
 
 ## The repair approach
 
@@ -49,10 +49,12 @@ The device enumerates over Thunderbolt and PCI Express. macOS attaches the Black
 | --- | --- |
 | Thunderbolt and PCI Express | Enumerated; vendor `0xBDBD`, device `0xA124` |
 | macOS kernel driver | DeckLink driver attached and audio engines registered |
-| Vendor capture application | Media Express reports no usable Blackmagic hardware |
+| Vendor capture application | Initially reported no hardware; after CMIO plugin isolation Media Express launches and acquires/releases device resource, but no physical frame captured yet |
 | Binary inspection | 64-bit Intel Mach-O kernel extension with readable C++ symbols |
 | REA + Ghidra | First analysis successful, including readiness and firmware callbacks |
 | Native DeckLink program | Device enumerated as Intensity Extreme; both video interfaces and 16 modes each discovered |
+| Direct video output format queries | 64 calls complete without crashing; 8-bit YUV supported in 16 modes; 10-bit YUV supported in five standard-definition modes |
+| System CoreMediaIO discovery with plugin isolated | Query completes normally; no video devices advertised through DAL plugin |
 | Physical connectors | HDMI, component, composite, S-Video masks returned for input and output |
 | Video mode activation | 1080p25, 8-bit YUV input and 1080p25 output enabled and disabled successfully |
 | Generated output frame submission | 1920×1080 8-bit YUV frame created and accepted by synchronous display API; physical sink not verified |
