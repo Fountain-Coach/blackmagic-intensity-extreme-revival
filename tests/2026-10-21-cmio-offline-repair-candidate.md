@@ -57,6 +57,8 @@ python3 scripts/offline_cmio_patch_candidate.py /path/to/private/original/DeckLi
 
 **Standalone test bundle.** A copy of the original bundle was placed in a temporary, non-discoverable user-owned directory on the Sierra host, with only the four verified patch bytes changed. The vendor signature correctly failed after modification. The **test copy only** was ad-hoc signed with Sierra's `codesign`. Its ad-hoc signature verified successfully, and a small independent CoreFoundation process could `CFBundleLoadExecutable` and unload it without crashing. None of these operations modified the preserved original.
 
+**Plugin factory test.** A self-authored [factory probe](../src/cmio-factory-probe.c) used CoreFoundation to instantiate the plugin factory from the preserved vendor-original bundle and, separately, from the ad-hoc signed candidate. Both returned `phase=create_plugin status=ok` and `phase=create_instance status=ok`. This is a nonprivileged factory initialization result, not CoreMediaIO device registration. The tests ran in separate short-lived processes without any system-wide installation.
+
 **Per-account discovery test.** The signed test bundle was copied temporarily under the account's own CoreMediaIO/DAL directory; a fresh CoreMediaIO enumeration still reported zero devices. The copy was removed after the test. This did not establish whether the user-level location is supported by Sierra.
 
 **Administrator-approved system-level A/B.** A guarded, time-bounded script temporarily installed the signed patch copy into the normal system-wide DAL directory, ran a fresh CoreMediaIO enumeration, and launched App Store. Its complete observed result:
