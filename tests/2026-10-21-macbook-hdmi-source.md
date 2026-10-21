@@ -45,9 +45,11 @@ The new [bounded color-bar output program](../src/decklink-colorbars-burst.cpp) 
 
 This tests simultaneous use of the two SDK interfaces but **does not verify full-duplex video transfer**. No receiver lock should be inferred from these return codes alone.
 
-## Next experiment: controlled self-loop
+## Historical proposal: controlled self-loop (superseded by 2026-10-21 half-duplex test)
 
-The current physical cable has one end at the Intensity Extreme **HDMI IN** and the other end at the MacBook USB-C hub. Move only the hub-side HDMI plug into the **empty HDMI OUT** socket on the Intensity Extreme, leaving the existing input end untouched. This yields:
+**IMPORTANT: This proposed experiment was completed and found incompatible with half-duplex operation.** See [measured half-duplex result](2026-10-21-half-duplex-loopback.md). Do not attempt simultaneous capture/playback on this device based on the text below; it is preserved to document the original hypothesis.
+
+At the time of this proposal, the physical cable had one end at the Intensity Extreme **HDMI IN** and the other end at the MacBook USB-C hub. The proposed action was to move the hub-side HDMI plug into the **empty HDMI OUT** socket on the Intensity Extreme, leaving the existing input end untouched. This yields:
 
 ```text
 Blackmagic HDMI OUT -- (same HDMI cable) --> Blackmagic HDMI IN
@@ -58,7 +60,7 @@ Blackmagic HDMI OUT -- (same HDMI cable) --> Blackmagic HDMI IN
 
 This arrangement removes the MacBook, its HDMI color encoding, and any potentially protected video source from the video path. Our entirely generated YUV test pattern is not protected media.
 
-After the physical loop is verified, run the same bounded generated-output burst concurrently with the matching 1080p25 capture observer, and report lock and frame callback counts. Capture buffers must not retain private media; the test pattern itself is generated.
+The originally proposed test was to run the same bounded generated-output burst concurrently with the matching 1080p25 capture observer, and report lock and frame callback counts. Capture buffers must not retain private media; the test pattern itself is generated.
 
 **Caveat:** The legacy hardware's actual simultaneous hardware playback/capture support is not yet established, despite successful concurrent API lifecycle calls. If it cannot operate in full duplex, use a separate unprotected HDMI camera or pattern generator as a deterministic source.
 

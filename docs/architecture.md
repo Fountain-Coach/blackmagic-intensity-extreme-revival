@@ -19,6 +19,7 @@ Reframe / Teatro on macOS, iPadOS and Linux
 ```
 
 **Boundaries**
+- The observed original Intensity Extreme is **half-duplex**: capture mode and playback mode cannot be enabled simultaneously. This was measured in both activation orders and agrees with Blackmagic SDK guidance. Do not promise a simultaneous same-device capture/processing/playback pipeline; use separate devices or capture and playback in separate sessions. [Evidence](../tests/2026-10-21-half-duplex-loopback.md).
 - A host physically connected to the device handles its platform-specific controller and drivers. An iPad on WLAN is a client, not a direct Thunderbolt-1 PCI host.
 - Independent, documented transport (potentially WebRTC for interactive preview and conventional video files for archives) should not dictate proprietary application semantics.
 - MIDI 2.0 may orchestrate scenarios and timing where appropriate; it is **not** a substitute for a high-bandwidth video transport.

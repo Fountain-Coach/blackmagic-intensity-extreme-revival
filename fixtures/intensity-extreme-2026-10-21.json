@@ -95,14 +95,14 @@
   },
   "not_yet_verified": [
     "actual video frame capture",
-    "physical output signal verified on a compatible monitor",
     "physical connector signal tests",
     "audio signal capture/playback",
     "conversion fidelity",
     "frame timing and synchronization",
     "standalone independent driver",
     "functionality on current macOS or iPadOS",
-    "HDMI video input sync and first valid frame from a physically verified signal"
+    "HDMI video input sync and first valid frame from a physically verified signal",
+    "physical output signal verified on a compatible monitor with output-only mode"
   ],
   "portability_note": "The test program requires the vendor's legacy DeckLinkAPI.framework and driver on this legacy host; this manifest is portable observation data, not a guarantee of modern driver compatibility.",
   "syphon_dependency": false,
@@ -182,5 +182,17 @@
       "receiver or firmware handling"
     ],
     "source_test": "tests/2026-10-21-hdmi-self-loop.md"
+  },
+  "duplex_observation": {
+    "test_date": "2026-10-21",
+    "physical_cable": "Blackmagic HDMI OUT connected to Blackmagic HDMI IN",
+    "result": "half_duplex",
+    "capture_enabled_first_then_output": "output activation rejected 0x80000009",
+    "output_enabled_first_then_capture": "input activation rejected 0x80000009",
+    "output_only_frame_submissions": 125,
+    "input_callbacks_during_test": 0,
+    "source": "tests/2026-10-21-half-duplex-loopback.md",
+    "not_an_independent_receiver_signal_test": true,
+    "device_idle_after": true
   }
 }

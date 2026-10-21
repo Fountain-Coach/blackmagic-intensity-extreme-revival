@@ -6,7 +6,7 @@ A video-capture device does not stop being useful simply because its manufacture
 
 Inspired by the practical spirit of a *Repair Café*: understand what is broken, share what we learn, and make functioning equipment useful for longer.
 
-> **Current status — native capture/playback APIs recovered; HDMI receiver not locked.** Our self-authored programs enumerate the device, negotiate input and output modes, and submit a generated playback frame through the installed legacy driver. With the Mac mini's HDMI output feeding the Intensity Extreme HDMI input, capture can start, but the driver reports **no input signal lock** at 1080p30 and delivers no frames. A temporary 720p60 source-mode test likewise produced no frames. Physical signal transfer and an independent replacement driver remain unverified.
+> **Current status — native capture/playback APIs recovered; HDMI receiver not locked.** Our self-authored programs enumerate the device, negotiate input and output modes, and submit a generated playback frame through the installed legacy driver. With a Mac mini or MacBook HDMI source connected, capture can start, but the driver reports **no input signal lock** at 1080p30 and delivers no frames. A temporary 720p60 source-mode test likewise produced no frames. With Blackmagic HDMI OUT physically looped into HDMI IN, native tests established **half-duplex behavior**: whichever capture/playback mode was enabled second was rejected. Physical signal transfer and an independent replacement driver remain unverified.
 
 ## What we want to repair
 
@@ -42,12 +42,13 @@ The device enumerates over Thunderbolt and PCI Express. macOS attaches the Black
 | Video mode activation | 1080p25, 8-bit YUV input and 1080p25 output enabled and disabled successfully |
 | Generated output frame submission | 1920×1080 8-bit YUV frame created and accepted by synchronous display API; physical sink not verified |
 | HDMI self-loop signal | Mac mini display identifies BMD HDMI at 1080p30; legacy configuration selects HDMI input (`0x2`) |
-| HDMI receiver signal lock | **False during active 1080p30 capture** (successful status API call) |
+| HDMI receiver signal lock | **False during active 1080p30 capture** with an external computer source |
+| Simultaneous capture and playback | **Rejected** whichever direction was enabled second (half-duplex); generated HDMI self-loop cannot function |
 | Input stream callback | 1080p25, 1080p30 and temporary 720p60 capture tests: no frames received |
 | Input frame capture / physical output verification | **Not yet demonstrated** |
 | Independent driver | **Not implemented** |
 
-The [MacBook HDMI input and self-loop test plan](tests/2026-10-21-macbook-hdmi-source.md) records a second computer HDMI source with no receiver signal lock and introduces a generated YUV color-bar experiment for controlled HDMI output-to-input loopback. The [hardware capability inventory](docs/hardware-capabilities.md) tracks every documented video, audio and conversion function. The [native enumeration probe](src/decklink-enumerate.cpp), [single-frame output experiment](src/decklink-output-frame.cpp), and [bounded input observer](src/decklink-input-observer.cpp) demonstrate the progressively recovered interface. The [dated enumeration](tests/2026-10-21-native-enumeration.md), [output](tests/2026-10-21-single-frame-output.md), [input](tests/2026-10-21-input-callback.md), and [HDMI loopback diagnostics](tests/2026-10-21-hdmi-self-loop.md) logs separate successful API calls from unverified physical signals. The [investigation log](docs/investigation.md) records the reverse-engineering evidence. The complete copyrighted vendor binaries, firmware and their decompiler output are **not distributed here**.
+The [confirmed half-duplex loopback result](tests/2026-10-21-half-duplex-loopback.md) supersedes the [earlier proposed MacBook HDMI self-loop](tests/2026-10-21-macbook-hdmi-source.md). The earlier report documents the MacBook HDMI source and the now-disproven self-loop hypothesis. The [hardware capability inventory](docs/hardware-capabilities.md) tracks every documented video, audio and conversion function. The [native enumeration probe](src/decklink-enumerate.cpp), [single-frame output experiment](src/decklink-output-frame.cpp), and [bounded input observer](src/decklink-input-observer.cpp) demonstrate the progressively recovered interface. The [dated enumeration](tests/2026-10-21-native-enumeration.md), [output](tests/2026-10-21-single-frame-output.md), [input](tests/2026-10-21-input-callback.md), and [HDMI loopback diagnostics](tests/2026-10-21-hdmi-self-loop.md) logs separate successful API calls from unverified physical signals. The [investigation log](docs/investigation.md) records the reverse-engineering evidence. The complete copyrighted vendor binaries, firmware and their decompiler output are **not distributed here**.
 
 ## Why this matters
 
