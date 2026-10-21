@@ -8,6 +8,17 @@ Inspired by the practical spirit of a *Repair Café*: understand what is broken,
 
 > **Current status — native capture/playback APIs recovered; HDMI receiver not locked.** Our self-authored programs enumerate the device, negotiate input and output modes, and submit a generated playback frame through the installed legacy driver. With a Mac mini or MacBook HDMI source connected, capture can start, but the driver reports **no input signal lock** at 1080p30 and delivers no frames. A temporary 720p60 source-mode test likewise produced no frames. With Blackmagic HDMI OUT physically looped into HDMI IN, native tests established **half-duplex behavior**: whichever capture/playback mode was enabled second was rejected. Physical signal transfer and an independent replacement driver remain unverified.
 
+## Try the software simulation — no additional hardware required
+
+The [Fountain Virtual Video Instrument](docs/virtual-video-instrument.md) models the original device's video modes, deterministic YUV 4:2:2 frames, frame timing, source loss, format mismatch, protected input and strict half-duplex operation. It is a **replaceable software backend**, not a claim of a repaired HDMI receiver. The iPad-friendly browser preview is served by a small Python HTTP process on a trusted local host.
+
+```sh
+python3 -m unittest discover -s simulator/tests -v
+python3 -m simulator.server --host 127.0.0.1 --port 8172
+```
+
+Open `http://127.0.0.1:8172/` on the host. See the [simulator design and API](docs/virtual-video-instrument.md) for trusted LAN access. **No Syphon, Blackmagic SDK or third-party Python dependency** is required. Synthetic frames are visibly marked, and real hardware validation remains separate.
+
 ## What we want to repair
 
 The tested setup includes:

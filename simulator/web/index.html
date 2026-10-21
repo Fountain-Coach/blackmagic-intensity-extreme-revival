@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Fountain | Virtual Video Instrument</title>
+<style>
+:root{--ink:#e7e5de;--muted:#9fa7ab;--line:#343c40;--panel:#1d2629;--back:#11181a;--accent:#b0d3cb;--error:#eead96}
+*{box-sizing:border-box}body{margin:0;background:var(--back);color:var(--ink);font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+main{max-width:1150px;margin:auto;padding:clamp(18px,4vw,45px)}
+header{display:flex;justify-content:space-between;align-items:center;gap:15px;border-bottom:1px solid var(--line);padding-bottom:20px}
+.brand{font-size:13px;letter-spacing:.18em;text-transform:uppercase;font-weight:700}
+.identity{font-size:12px;color:var(--muted)}
+a{color:var(--accent)}.tag{display:inline-block;border:1px solid #647875;padding:4px 9px;border-radius:100px;color:var(--accent);font-size:11px;white-space:nowrap}
+h1{font-weight:450;letter-spacing:-.035em;line-height:1.12;font-size:clamp(28px,4.6vw,52px);margin:34px 0 12px}
+.lead{max-width:750px;color:#bac1c2;margin:0 0 29px;font-size:16px}
+.layout{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(285px,.9fr);gap:22px;align-items:start}
+@media(max-width:830px){.layout{grid-template-columns:1fr}}
+.stage,.panel{border:1px solid var(--line);border-radius:14px;background:var(--panel);overflow:hidden}
+.preview{position:relative;background:#090d0f;aspect-ratio:16/9;display:flex;align-items:center;justify-content:center}
+.preview img{display:block;width:100%;height:100%;object-fit:contain;image-rendering:pixelated}
+.watermark{position:absolute;top:13px;left:13px;padding:5px 10px;border-radius:5px;background:rgba(6,12,15,.9);letter-spacing:.14em;font-size:10px;font-weight:700}
+.no-signal{position:absolute;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;background:#0a1012;text-align:center;padding:24px}
+.no-signal b{font-size:18px;font-weight:500}.no-signal p{color:var(--muted);max-width:350px}
+.stage-footer{display:flex;gap:20px;justify-content:space-between;padding:15px 18px;font-size:12px;color:var(--muted);flex-wrap:wrap}
+#live-status{color:var(--accent)}
+.panel{padding:21px}
+.panel h2{font-size:14px;margin:0 0 16px;font-weight:600;letter-spacing:.02em}
+label{display:block;margin:16px 0 6px;color:var(--muted);font-size:12px}
+select{appearance:auto;width:100%;background:#101719;border:1px solid #455054;border-radius:7px;padding:11px;color:var(--ink);font:inherit}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:20px}
+button{cursor:pointer;background:#303d40;border:1px solid #516063;border-radius:8px;padding:10px 11px;color:var(--ink);font:inherit;font-size:12px;text-align:center;min-height:43px}
+button.primary{background:var(--accent);color:#152021;border-color:var(--accent);font-weight:700}button.wide{grid-column:span 2}
+button:hover{filter:brightness(1.12)}button:disabled{opacity:.48;cursor:not-allowed}
+.stats{margin-top:18px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.stat{border-top:1px solid var(--line);padding-top:10px}.stat strong{font-size:21px;font-weight:500;display:block;font-variant-numeric:tabular-nums}.stat span{display:block;color:var(--muted);font-size:11px}
+#verdict{min-height:42px;margin-top:16px;color:var(--accent);font-size:12px}
+.lower{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-top:22px}
+@media(max-width:830px){.lower{grid-template-columns:1fr}}
+.secondary{padding:18px 20px}.secondary h2{font-size:13px;margin:0 0 12px}
+pre{white-space:pre-wrap;word-break:break-word;font:11px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;color:#bec7c6;margin:0}
+.note{color:var(--muted);font-size:12px;border-top:1px solid var(--line);padding-top:19px;margin-top:24px}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+</style>
+</head>
+<body>
+<main>
+<header><div><div class="brand">Fountain Coach <span aria-hidden="true">/</span> Repair Lab</div><div class="identity">Intensity Extreme Revival · virtual backend</div></div><span class="tag">SIMULATION · NO HARDWARE</span></header>
+<h1>An instrument before the machine.</h1>
+<p class="lead">A deterministic software model of the Blackmagic Intensity Extreme. Generate video, exercise frame timing and reproduce signal loss, protected input, format mismatch and half-duplex conflicts. Nothing here reads physical HDMI.</p>
+<div class="layout">
+<section class="stage" aria-label="Simulated video preview">
+<div class="preview"><img id="video-frame" alt="Synthetic eight-bar YUV video test pattern" src="/frame.png" /><span class="watermark">SYNTHETIC VIDEO · NOT CAPTURED</span><div class="no-signal" id="no-signal"><b>No simulated input lock</b><p id="no-signal-reason">This is a controlled fault condition, not an observation from the Blackmagic hardware.</p></div></div>
+<div class="stage-footer"><span id="live-status" role="status">Starting virtual backend</span><span id="frame-details">No frame inspected yet</span></div>
+</section>
+<section class="panel">
+<h2>Test scenario</h2>
+<label for="direction">Instrument direction</label><select id="direction"><option value="capture">Capture from virtual HDMI</option><option value="playback">Playback to virtual HDMI</option></select>
+<label for="mode">Device video format</label><select id="mode"><option>720p50</option><option>720p60</option><option>1080p25</option><option>1080p30</option><option>1080p29.97</option><option>PAL</option><option>NTSC</option></select>
+<label for="fault">Source condition</label><select id="fault"><option value="clean">Connected · matching signal</option><option value="disconnected">Cable disconnected</option><option value="mismatch">Wrong input timing</option><option value="protected">Protected HDMI input</option><option value="drops">Drop every third frame</option></select>
+<div class="actions">
+<button class="primary wide" id="configure">Start scenario</button>
+<button id="advance">Step one frame</button>
+<button id="advance-ten">Step ten frames</button>
+<button class="wide" id="duplex">Test forbidden simultaneous input/output</button>
+<button class="wide" id="stop">Stop instrument</button>
+</div>
+<div class="stats"><div class="stat"><strong id="frames">0</strong><span>Frames delivered</span></div><div class="stat"><strong id="lost">0</strong><span>Frames absent / dropped</span></div><div class="stat"><strong id="lock">—</strong><span>Virtual input lock</span></div></div>
+<div id="verdict" role="status" aria-live="polite">Choose a scenario to inspect its state.</div>
+</section>
+</div>
+<div class="lower">
+<section class="panel secondary"><h2>Frame provenance</h2><pre id="metadata">Waiting for virtual frame metadata…</pre></section>
+<section class="panel secondary"><h2>Instrument event log</h2><pre id="events">Awaiting test activity…</pre></section>
+</div>
+<p class="note">This preview uses only the Python standard library and deterministic generated YUV 4:2:2 frames. It does not load DeckLinkAPI, use Syphon, control the Blackmagic device, or establish an electrical HDMI signal. Physical capture remains a separate acceptance test. <a href="https://github.com/Fountain-Coach/blackmagic-intensity-extreme-revival">Project and reproducible tests on GitHub ↗</a></p>
+</main>
+<script>
+const $=(id)=>document.getElementById(id);
+let latest=null;
+async function request(path,payload){
+ const opts=payload===undefined?{}:{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)};
+ const response=await fetch(path,opts);const data=await response.json();
+ if(!response.ok)throw new Error(data.message||data.error||"Request failed");
+ return data;
+}
+function show(state){
+ latest=state;
+ $("frames").textContent=state.frames_delivered;
+ $("lost").textContent=state.frames_dropped;
+ $("lock").textContent=state.activity==="playback"?"N/A":state.signal_locked?"YES":"NO";
+ $("live-status").textContent=state.activity==="idle"?"Idle":state.activity==="playback"?"Virtual output active":state.signal_locked?"Virtual signal locked":"Virtual receiver unlocked";
+ const canView=state.last_frame && (state.activity==="playback"||state.signal_locked);
+ $("no-signal").style.display=canView?"none":"flex";
+ $("no-signal-reason").textContent=state.activity==="idle"?"Start a virtual capture or playback scenario.":state.source.protected?"The virtual source is protected; no pixels may be received.":!state.source.connected?"The simulated HDMI cable is disconnected.":state.source.mode!==state.mode?"Virtual source timing does not match the requested mode.":"No generated frame is available.";
+ if(canView){$("video-frame").src="/frame.png?frame="+state.last_frame.frame+"&t="+state.last_frame.crc32;}
+ $("frame-details").textContent=state.last_frame?state.last_frame.width+" × "+state.last_frame.height+" · "+state.last_frame.pixel_format:"No emitted frame";
+ $("metadata").textContent=state.last_frame?JSON.stringify(state.last_frame,null,2):"No frame received or emitted.";
+ $("events").textContent=state.events.map(e=>JSON.stringify(e)).join("\n")||"No events yet.";
+}
+async function perform(task){
+ try{$("verdict").textContent="Running virtual operation…";await task();}
+ catch(err){$("verdict").textContent="Simulator: "+err.message;}
+}
+$("configure").onclick=()=>perform(async()=>{
+ const mode=$("mode").value, fault=$("fault").value;
+ const modes=["720p50","720p60","1080p25","1080p30","1080p29.97","PAL","NTSC"];
+ const different=modes.find(m=>m!==mode);
+ const state=await request("/api/configure",{direction:$("direction").value,mode,
+  source_mode:fault==="mismatch"?different:mode,
+  connected:fault!=="disconnected",protected:fault==="protected",drop_every:fault==="drops"?3:0});
+ show(state);$("verdict").textContent="Scenario initialized · no physical device touched.";
+});
+$("advance").onclick=()=>perform(async()=>{show(await request("/api/step",{count:1}));$("verdict").textContent="Advanced one deterministic frame interval.";});
+$("advance-ten").onclick=()=>perform(async()=>{show(await request("/api/step",{count:10}));$("verdict").textContent="Advanced ten deterministic frame intervals.";});
+$("duplex").onclick=()=>perform(async()=>{
+ const r=await request("/api/half-duplex",{});show(r.state);
+ $("verdict").textContent=r.blocked?"Half-duplex correctly rejected second operation: "+r.code:"Unexpected result";
+});
+$("stop").onclick=()=>perform(async()=>{show(await request("/api/stop",{}));$("verdict").textContent="Virtual device released.";});
+request("/api/state").then(show).catch(err=>$("verdict").textContent=err.message);
+</script>
+</body></html>

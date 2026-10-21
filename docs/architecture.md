@@ -1,6 +1,6 @@
 # The Fountain Video Instrument: proposed architecture
 
-**Status: design direction, not implemented software.**
+**Status: virtual capture/playback backend implemented and tested; physical and cross-platform native adapters remain in design.**
 
 The Intensity Extreme is only one candidate backend. We separate the physical hardware from the semantics of capture, recording, transformation and presentation.
 
@@ -32,5 +32,7 @@ Reframe / Teatro on macOS, iPadOS and Linux
 3. Recorded and network-accessible frames with timestamps.
 4. One host-independent visual transformation and playback scenario.
 5. Investigation of a replacement hardware backend after low-level behavior is sufficiently known.
+
+**Implemented reference:** the [Virtual Video Instrument](virtual-video-instrument.md) supplies deterministic YUV frames, rational timestamps, half-duplex behavior and a browser preview for development without physical video equipment. The real HDMI receiver remains unverified.
 
 **Explicit exclusion:** Syphon is not part of the target stack.

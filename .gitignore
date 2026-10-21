@@ -16,3 +16,8 @@ evidence/
 .env
 *.pem
 *.key
+
+# Generated Python caches
+__pycache__/
+*.pyc
+.pytest_cache/
