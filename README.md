@@ -21,7 +21,7 @@ Open `http://127.0.0.1:8172/` on the host. See the [simulator design and API](do
 
 ## Legacy driver failure affecting other macOS applications
 
-Our tests exposed a reproducible legacy-Desktop-Video integration defect: opening **App Store 2.2.1 on Sierra** crashes inside Blackmagic's system-wide CoreMediaIO device-discovery plugin and DeckLinkAPI. Blackmagic's hardware helper also crashes at nearly the same time. We have [documented the four matching crash stacks](tests/2026-10-21-app-store-blackmagic-crash.md), the limits of current evidence, and a reversible plugin-isolation experiment. **This is not fixed yet.**
+Our tests exposed a reproducible legacy-Desktop-Video integration defect: opening **App Store 2.2.1 on Sierra** crashes inside Blackmagic's system-wide CoreMediaIO device-discovery plugin and DeckLinkAPI. Blackmagic's hardware helper also crashes at nearly the same time. We have [documented the four matching crash stacks](tests/2026-10-21-app-store-blackmagic-crash.md), the limits of current evidence, and a reversible plugin-isolation experiment. **The App Store startup crash is now mitigated by an administrator-approved, reversible isolation of the old CoreMediaIO plugin; the proprietary bug itself has not been patched.**
 
 ## What we want to repair
 

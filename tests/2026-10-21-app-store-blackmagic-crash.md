@@ -1,6 +1,25 @@
 # Blackmagic's CoreMediaIO plugin crashes App Store — 21 October 2026
 
-**Status: reproduced on the legacy capture host. Root cause narrowed to Blackmagic's CoreMediaIO / DeckLinkAPI transaction path, not yet fixed.**
+**Status: reproducible App Store startup crash mitigated by a verified, reversible CoreMediaIO plugin isolation. The underlying proprietary defect remains unfixed.**
+
+## Verified operational workaround — 21 October 2026
+
+A normal administrator-approved A/B experiment temporarily removed **only** the old \`DeckLinkCMIO.plugin\` bundle from macOS's CoreMediaIO device-discovery directory. With that bundle isolated:
+
+- App Store 2.2.1 launched successfully; nine seconds later it was still running.
+- No new App Store crash report was created (five existing reports before and after the test).
+- The original plug-in was restored by the test itself, with restoration exit code 0 and unchanged SHA-256.
+
+Following the confirmed A/B result, an **administrator-approved persistent isolation** was applied. A later read-only verification showed:
+
+- The original plug-in is preserved outside the automatic discovery directory with matching SHA-256 \`6f1eda3ee6521dcb4c62df86f4f4e64e7e10a35dd47b39ee97d35472ca469da3\`.
+- Both original Desktop Video 10.4 kernel extensions remain loaded.
+- The independently written DeckLink native enumeration tool continues to identify **Intensity Extreme**; device busy-state is idle.
+- App Store runs after restart without new crash reports, and its process does not show the Blackmagic CoreMediaIO/API libraries among its open files.
+- The live App Store process has remained present for over one minute after relaunch. This is a **startup-crash acceptance test**, not a full certification of store sign-in, downloads or purchases.
+- A local user-initiated restoration command was placed on the legacy host. It requires ordinary administrator approval and verifies the same original plug-in hash; restoration was *not* performed after the persistent isolation.
+
+**Impact and limits:** macOS applications that rely on this old CoreMediaIO integration to discover the Blackmagic as a video device will no longer see it via that plug-in. Direct DeckLink SDK access and the loaded kernel driver remain available. The real HDMI signal-lock issue and independent-driver replacement are separate, still-open investigations. No firmware or kernel extension was changed.
 
 ## Why this matters
 
@@ -61,7 +80,7 @@ The original 64-bit portions of the installed Blackmagic `DeckLinkAPI` shared li
 
 These observations narrow the potential repair to a specific application/plugin-to-API boundary, but do not remove the need for a controlled A/B CoreMediaIO isolation test under proper administrator authorization. Raw proprietary decompiler output remains in the private workspace and is not distributed.
 
-## Proposed reversible isolation test — NOT YET EXECUTED
+## Historical isolation plan — subsequently executed and validated
 
 The *minimal* intervention is to temporarily withdraw **only** the system-wide `DeckLinkCMIO.plugin` from macOS's `/Library/CoreMediaIO/Plug-Ins/DAL/` discovery directory, to a preserved, administrator-controlled quarantine location outside that directory. This avoids changing the kernel driver, the underlying API framework, firmware or physical I/O.
 
@@ -78,7 +97,7 @@ Required acceptance sequence:
 
 Disabling the DAL plug-in may remove system-wide camera/video-device discovery for this Blackmagic product in unrelated applications, even if direct DeckLink API use continues working. This potential impact is why the isolation must be deliberate and reversible.
 
-## Administrator privilege and sandbox test update
+## Historical administrator privilege and sandbox test observations
 
 The console account belongs to the macOS \`admin\` group. However, read-only authorization checks show \`sudo -n\` requires a password for elevation, which is different from lacking administrator eligibility. The CoreMediaIO parent directory is owned by root, so group membership does not permit unprivileged removal.
 
