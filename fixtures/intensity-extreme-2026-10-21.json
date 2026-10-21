@@ -95,7 +95,7 @@
   },
   "not_yet_verified": [
     "actual video frame capture",
-    "actual video frame output",
+    "physical output signal verified on a compatible monitor",
     "active input cable or source",
     "physical connector signal tests",
     "audio signal capture/playback",
@@ -105,5 +105,40 @@
     "functionality on current macOS or iPadOS"
   ],
   "portability_note": "The test program requires the vendor's legacy DeckLinkAPI.framework and driver on this legacy host; this manifest is portable observation data, not a guarantee of modern driver compatibility.",
-  "syphon_dependency": false
+  "syphon_dependency": false,
+  "frame_experiments": {
+    "generated_output_frame": {
+      "source": "tests/2026-10-21-single-frame-output.md",
+      "program": "src/decklink-output-frame.cpp",
+      "mode": "1080p25",
+      "pixel_format": "8-bit YUV 4:2:2 (2vuy)",
+      "pattern": "generated eight-color-bar frame",
+      "bytes": 4147200,
+      "enable_output_api_success": true,
+      "create_frame_api_success": true,
+      "get_buffer_api_success": true,
+      "display_video_frame_sync_api_success": true,
+      "disable_output_api_success": true,
+      "physical_output_observed": false,
+      "note": "The frame was accepted by the synchronous display API; no HDMI/component monitor observation was made."
+    },
+    "input_callback": {
+      "source": "tests/2026-10-21-input-callback.md",
+      "program": "src/decklink-input-observer.cpp",
+      "mode": "1080p25",
+      "pixel_format": "8-bit YUV 4:2:2 (2vuy)",
+      "duration_seconds": 3,
+      "install_callback_api_success": true,
+      "enable_input_api_success": true,
+      "start_streams_api_success": true,
+      "stop_streams_api_success": true,
+      "remove_callback_api_success": true,
+      "disable_input_api_success": true,
+      "received_frame_callbacks": 0,
+      "valid_frame_callbacks": 0,
+      "input_source_verified": false,
+      "media_content_saved": false,
+      "note": "No callbacks occurred; cannot distinguish absent source, mismatch, or capture-path issues."
+    }
+  }
 }
