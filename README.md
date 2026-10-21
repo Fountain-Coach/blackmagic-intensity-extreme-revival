@@ -40,10 +40,12 @@ The device enumerates over Thunderbolt and PCI Express. macOS attaches the Black
 | Native DeckLink program | Device enumerated as Intensity Extreme; both video interfaces and 16 modes each discovered |
 | Physical connectors | HDMI, component, composite, S-Video masks returned for input and output |
 | Video mode activation | 1080p25, 8-bit YUV input and 1080p25 output enabled and disabled successfully |
-| Video frame transfer | **Not yet demonstrated** |
+| Generated output frame submission | 1920×1080 8-bit YUV frame created and accepted by synchronous display API; physical sink not verified |
+| Input stream callback | 1080p25 stream starts and stops, but 0 frames received during 3 seconds |
+| Input frame capture / physical output verification | **Not yet demonstrated** |
 | Independent driver | **Not implemented** |
 
-The [hardware capability inventory](docs/hardware-capabilities.md) tracks every documented video, audio and conversion function. Our tested [native C++ probe](src/decklink-enumerate.cpp) and [dated results](tests/2026-10-21-native-enumeration.md) show what is already usable through the installed driver. The [investigation log](docs/investigation.md) records the reverse-engineering evidence. The complete copyrighted vendor binaries, firmware and their decompiler output are **not distributed here**.
+The [hardware capability inventory](docs/hardware-capabilities.md) tracks every documented video, audio and conversion function. The [native enumeration probe](src/decklink-enumerate.cpp), [single-frame output experiment](src/decklink-output-frame.cpp), and [bounded input observer](src/decklink-input-observer.cpp) demonstrate the progressively recovered interface. The [dated enumeration](tests/2026-10-21-native-enumeration.md), [output](tests/2026-10-21-single-frame-output.md), and [input](tests/2026-10-21-input-callback.md) logs separate successful API calls from unverified physical signals. The [investigation log](docs/investigation.md) records the reverse-engineering evidence. The complete copyrighted vendor binaries, firmware and their decompiler output are **not distributed here**.
 
 ## Why this matters
 
