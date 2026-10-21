@@ -46,6 +46,21 @@ A minimal self-authored command-line program asking AVFoundation for video captu
 
 The existing standalone DeckLink probes also enumerate one Intensity Extreme, expose video input and output interfaces and perform mode activation without the App Store's crash. They use the installed SDK and driver directly, not the CoreMediaIO discovery path.
 
+## Static examination of the precise crashing API routine (same day)
+
+The original 64-bit portions of the installed Blackmagic `DeckLinkAPI` shared library and `DeckLinkCMIO` plugin were copied, **without modifying either installed file**, to a private analysis workspace on the Ubuntu Mac mini. REA **6.7.0** with **Ghidra 12.1.4** successfully analyzed both *thinned x86-64 Mach-O slices*. The original files also contain i386 code, which the REA provider cannot analyze as a universal Mach-O without extraction.
+
+- Original DeckLinkAPI (universal binary) SHA-256: `6972a2b025cf333a6bbf2c8a1199af89a9f85c1ccfcb17d2055876251c558137`.
+- Original DeckLinkCMIO (universal binary) SHA-256: `6f1eda3ee6521dcb4c62df86f4f4e64e7e10a35dd47b39ee97d35472ca469da3`.
+- The API x86-64 analysis recognized 6,557 procedures and 19,882 defined strings. Counts are analysis tool inventory, not recovered original source.
+- The exact faulting constructor `DesktopVideoMessage::CreateScheduleVideoFrameRequest(int, void*, unsigned long, unsigned long, void*, unsigned long, void*, unsigned long, void*, unsigned long)` begins at image-relative address `0x86428`.
+- The failing App Store thread reports offset `+169` within that constructor. Native disassembly places the execution point at **`0x864d1`**, immediately following an indirect call at `0x864ce` through the new message object's virtual table.
+- Ghidra reconstructs that preceding virtual call as setting the message field **`SharedFrame`**, with a pointer and associated length. Other fields written by the constructor include `WriteStructData`, `ReadStructDataSize`, `Method`, `VANCField1`, and `VANCField2`; the message type is `0x18`.
+
+**Interpretation:** The App Store crash occurs inside Blackmagic's internal request construction and message-object handling when a CoreMediaIO discovery-driven output-mode query is underway. The immediate Apple symbol is `_os_object_release` on an invalid object. The static findings support investigating ownership, null handling and pointer representation of the `SharedFrame` field. They do **not** establish a double-free, defective firmware, or the precise invalid input argument.
+
+These observations narrow the potential repair to a specific application/plugin-to-API boundary, but do not remove the need for a controlled A/B CoreMediaIO isolation test under proper administrator authorization. Raw proprietary decompiler output remains in the private workspace and is not distributed.
+
 ## Proposed reversible isolation test — NOT YET EXECUTED
 
 The *minimal* intervention is to temporarily withdraw **only** the system-wide `DeckLinkCMIO.plugin` from macOS's `/Library/CoreMediaIO/Plug-Ins/DAL/` discovery directory, to a preserved, administrator-controlled quarantine location outside that directory. This avoids changing the kernel driver, the underlying API framework, firmware or physical I/O.
