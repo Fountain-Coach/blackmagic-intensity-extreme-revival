@@ -96,13 +96,13 @@
   "not_yet_verified": [
     "actual video frame capture",
     "physical output signal verified on a compatible monitor",
-    "active input cable or source",
     "physical connector signal tests",
     "audio signal capture/playback",
     "conversion fidelity",
     "frame timing and synchronization",
     "standalone independent driver",
-    "functionality on current macOS or iPadOS"
+    "functionality on current macOS or iPadOS",
+    "HDMI video input sync and first valid frame from a physically verified signal"
   ],
   "portability_note": "The test program requires the vendor's legacy DeckLinkAPI.framework and driver on this legacy host; this manifest is portable observation data, not a guarantee of modern driver compatibility.",
   "syphon_dependency": false,
@@ -140,5 +140,47 @@
       "media_content_saved": false,
       "note": "No callbacks occurred; cannot distinguish absent source, mismatch, or capture-path issues."
     }
+  },
+  "hdmi_self_loop_diagnostics": {
+    "source": "Mac mini (same machine as the Thunderbolt capture host)",
+    "physical_connection": "user-confirmed Mac mini HDMI OUT -> Intensity Extreme HDMI IN",
+    "macos_display_name": "BMD HDMI",
+    "macos_display_online": true,
+    "original_output_mode": {
+      "width": 1920,
+      "height": 1080,
+      "refresh_hz": 30.0
+    },
+    "decklink_configuration_v10_4": {
+      "input_video_connection": "0x2",
+      "input_connection_name": "HDMI",
+      "output_connection_mask": "0xa"
+    },
+    "supports_automatic_format_detection": false,
+    "active_1080p30_capture": {
+      "pixel_format": "8-bit YUV 4:2:2",
+      "enable_input_success": true,
+      "start_streams_success": true,
+      "signal_status_query_success": true,
+      "signal_locked": false,
+      "detected_mode_query_status": "0x80000001",
+      "frame_callbacks": 0,
+      "stop_and_cleanup_success": true
+    },
+    "temporary_720p60_source_test": {
+      "source_mode_switch_succeeded": true,
+      "matching_input_mode": "720p60",
+      "frame_callbacks": 0,
+      "original_display_mode_restored": true,
+      "signal_locked": "not queried for this trial"
+    },
+    "current_physical_input_status": "not synchronized",
+    "remaining_causes_unresolved": [
+      "HDMI signal color encoding (RGB / YCbCr)",
+      "HDMI protection/handshake",
+      "cable/sink negotiation",
+      "receiver or firmware handling"
+    ],
+    "source_test": "tests/2026-10-21-hdmi-self-loop.md"
   }
 }

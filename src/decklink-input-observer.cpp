@@ -15,8 +15,12 @@ typedef int32_t (*Next)(void*, void**);
 typedef int32_t (*Enable)(void*, uint32_t, uint32_t, uint32_t);
 typedef int32_t (*NoArg)(void*);
 typedef int32_t (*SetCallback)(void*, void*);
+typedef int32_t (*GetFlag)(void*, uint32_t, bool*);
+typedef int32_t (*GetInt)(void*, uint32_t, int64_t*);
+typedef int32_t (*GetCount)(void*, uint32_t*);
 typedef uint32_t (*GetFlags)(void*);
 typedef long (*GetDimension)(void*);
+static const unsigned char statusIID[16]={0x5f,0x55,0x82,0x00,0x40,0x28,0x49,0xbc,0xbe,0xac,0xdb,0x3f,0xa4,0xa9,0x6e,0x46};
 static const unsigned char inputIID[16]={0xaf,0x22,0x76,0x2b,0xdf,0xac,0x48,0x46,0xaa,0x79,0xfa,0x88,0x83,0x56,0x09,0x95};
 static const unsigned char callbackIID[16]={0xdd,0x04,0xe5,0xec,0x74,0x15,0x42,0xab,0xae,0x4a,0xe8,0x0c,0x4d,0xfc,0x04,0x4a};
 static const unsigned char unknownIID[16]={0,0,0,0,0,0,0,0,0xc0,0,0,0,0,0,0,0x46};
@@ -55,10 +59,12 @@ static void* callbackTable[5]={
     (void*)onFormatChange,(void*)onFrame
 };
 int main(int argc, char** argv) {
-    if (argc != 2 || strcmp(argv[1],"--observe-three-seconds")) {
-        fprintf(stderr,"usage: input-observer --observe-three-seconds\n");
-        return 64;
-    }
+    uint32_t requestedMode = 0;
+    if (argc == 2 && (strcmp(argv[1],"--observe-1080p25") == 0 || strcmp(argv[1],"--observe-three-seconds") == 0)) requestedMode=0x48703235;
+    else if (argc == 2 && strcmp(argv[1],"--observe-1080p30") == 0) requestedMode=0x48703330;
+    else if (argc == 2 && strcmp(argv[1],"--observe-720p60") == 0) requestedMode=0x68703630;
+    else { fprintf(stderr,"Usage: observer --observe-1080p25|--observe-1080p30|--observe-720p60\n"); return 64; }
+    printf("stage=requested_video_mode code=0x%08x\n",requestedMode);
     void* lib=dlopen("/Library/Frameworks/DeckLinkAPI.framework/DeckLinkAPI",RTLD_NOW|RTLD_LOCAL);
     if(!lib){fprintf(stderr,"stage=framework status=fail\n");return 20;}
     Factory factory=(Factory)dlsym(lib,"CreateDeckLinkIteratorInstance");
@@ -88,7 +94,7 @@ int main(int argc, char** argv) {
     printf("stage=set_callback status=0x%08x\n",(unsigned)rc);fflush(stdout);
     if(rc){exitCode=25;goto cleanup;}
     callbackInstalled=true;
-    rc=((Enable)ivt[6])(input,0x48703235,0x32767579,0);
+    rc=((Enable)ivt[6])(input,requestedMode,0x32767579,0);
     printf("stage=enable_input status=0x%08x\n",(unsigned)rc);fflush(stdout);
     if(rc){exitCode=26;goto cleanup;}
     enabled=true;
@@ -96,6 +102,22 @@ int main(int argc, char** argv) {
     printf("stage=start_streams status=0x%08x\n",(unsigned)rc);fflush(stdout);
     if(rc){exitCode=27;goto cleanup;}
     streams=true;
+    {
+        uint32_t queued=0;
+        int32_t qrc=((GetCount)ivt[8])(input,&queued);
+        printf("stage=queue_frames rc=0x%08x queued=%u\n",(unsigned)qrc,queued);
+        void* st=nullptr; CFUUIDBytes statusUUID; memcpy(&statusUUID,statusIID,16);
+        int32_t src=((Query)devV[0])(device,statusUUID,&st);
+        printf("stage=status_interface rc=0x%08x present=%d\n",(unsigned)src,st!=nullptr);
+        if(!src && st){
+            auto svt=*(void***)st; bool locked=false;int64_t mode=0;
+            int32_t lrc=((GetFlag)svt[3])(st,0x7669736c,&locked);
+            int32_t mrc=((GetInt)svt[4])(st,0x6476696d,&mode);
+            printf("stage=signal_lock rc=0x%08x locked=%d detected_mode_rc=0x%08x mode=0x%llx\n",(unsigned)lrc,locked,(unsigned)mrc,(unsigned long long)mode);
+            ((Release)svt[2])(st);
+        }
+        fflush(stdout);
+    }
     sleep(3);
 cleanup:
     if(streams) {
