@@ -1,0 +1,109 @@
+{
+  "schema": "fountain.video.device-observation/1",
+  "observed_on": "2026-10-21",
+  "source_test": "tests/2026-10-21-native-enumeration.md",
+  "source_program": "src/decklink-enumerate.cpp",
+  "provenance": {
+    "method": "direct DeckLink API runtime calls on owned legacy host",
+    "host_os": "macOS 10.12.6",
+    "host_arch": "x86_64",
+    "driver": "Blackmagic Desktop Video 10.4",
+    "status": "observed"
+  },
+  "device": {
+    "model": "Intensity Extreme",
+    "pci_vendor_id": "0xBDBD",
+    "pci_device_id": "0xA124"
+  },
+  "advertised_runtime_capabilities": {
+    "enumerated_device_count": 1,
+    "input_interface": {
+      "status": "verified",
+      "mode_count": 16
+    },
+    "output_interface": {
+      "status": "verified",
+      "mode_count": 16
+    },
+    "video_io_mask": "0x3",
+    "video_input_connections_mask": "0x3a",
+    "video_output_connections_mask": "0x3a",
+    "connection_mask_interpretation": [
+      "HDMI",
+      "Component",
+      "Composite",
+      "S-Video"
+    ],
+    "maximum_audio_channels": 2,
+    "idle_after_smoke_tests": true,
+    "common_input_output_mode_names": [
+      "NTSC",
+      "NTSC 23.98",
+      "PAL",
+      "NTSC Progressive",
+      "PAL Progressive",
+      "1080p23.98",
+      "1080p24",
+      "1080p25",
+      "1080p29.97",
+      "1080p30",
+      "1080i50",
+      "1080i59.94",
+      "1080i60",
+      "720p50",
+      "720p59.94",
+      "720p60"
+    ]
+  },
+  "explicit_mode_tests": {
+    "test_modes": [
+      "1080p25",
+      "720p50"
+    ],
+    "input_8bit_yuv": {
+      "query_succeeded": true,
+      "supported": true
+    },
+    "input_10bit_yuv": {
+      "query_succeeded": true,
+      "supported": false
+    },
+    "output_8bit_yuv": {
+      "query_succeeded": true,
+      "supported": true
+    },
+    "output_10bit_yuv": {
+      "query_succeeded": true,
+      "supported": false
+    },
+    "capture_enable_1080p25_8bit_yuv": {
+      "attempted": true,
+      "succeeded": true
+    },
+    "capture_disable": {
+      "attempted": true,
+      "succeeded": true
+    },
+    "output_enable_1080p25": {
+      "attempted": true,
+      "succeeded": true
+    },
+    "output_disable": {
+      "attempted": true,
+      "succeeded": true
+    }
+  },
+  "not_yet_verified": [
+    "actual video frame capture",
+    "actual video frame output",
+    "active input cable or source",
+    "physical connector signal tests",
+    "audio signal capture/playback",
+    "conversion fidelity",
+    "frame timing and synchronization",
+    "standalone independent driver",
+    "functionality on current macOS or iPadOS"
+  ],
+  "portability_note": "The test program requires the vendor's legacy DeckLinkAPI.framework and driver on this legacy host; this manifest is portable observation data, not a guarantee of modern driver compatibility.",
+  "syphon_dependency": false
+}
