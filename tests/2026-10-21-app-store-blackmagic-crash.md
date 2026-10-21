@@ -16,7 +16,7 @@ Following the confirmed A/B result, an **administrator-approved persistent isola
 - Both original Desktop Video 10.4 kernel extensions remain loaded.
 - The independently written DeckLink native enumeration tool continues to identify **Intensity Extreme**; device busy-state is idle.
 - App Store runs after restart without new crash reports, and its process does not show the Blackmagic CoreMediaIO/API libraries among its open files.
-- The live App Store process has remained present for over one minute after relaunch. This is a **startup-crash acceptance test**, not a full certification of store sign-in, downloads or purchases.
+- The live App Store process has remained present for over one minute after relaunch. A private, visual inspection of the silver Mac Desktop also confirmed that the App Store storefront rendered featured applications, navigation and listings, not only a background process. Screenshots are **not** published because the Desktop contains private contents. This is a **startup-crash and storefront-rendering acceptance test**, not full certification of store sign-in, downloads or purchases.
 - A local user-initiated restoration command was placed on the legacy host. It requires ordinary administrator approval and verifies the same original plug-in hash; restoration was *not* performed after the persistent isolation.
 
 **Impact and limits:** macOS applications that rely on this old CoreMediaIO integration to discover the Blackmagic as a video device will no longer see it via that plug-in. Direct DeckLink SDK access and the loaded kernel driver remain available. The real HDMI signal-lock issue and independent-driver replacement are separate, still-open investigations. No firmware or kernel extension was changed.
