@@ -40,7 +40,7 @@ The device enumerates over Thunderbolt and PCI Express. macOS attaches the Black
 | Video capture | **Not yet demonstrated** |
 | Independent driver | **Not implemented** |
 
-Selected analytical findings are in [the investigation log](docs/investigation.md). The complete copyrighted vendor binaries, firmware and their decompiler output are **not distributed here**.
+The [hardware capability inventory](docs/hardware-capabilities.md) tracks every documented video, audio and conversion function, and [the investigation log](docs/investigation.md) records the verified reverse-engineering evidence. The complete copyrighted vendor binaries, firmware and their decompiler output are **not distributed here**.
 
 ## Why this matters
 
