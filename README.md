@@ -6,7 +6,7 @@ A video-capture device does not stop being useful simply because its manufacture
 
 Inspired by the practical spirit of a *Repair Café*: understand what is broken, share what we learn, and make functioning equipment useful for longer.
 
-> **Current status — research, not a working replacement driver.** The original capture hardware is visible over Thunderbolt/PCI Express and its legacy macOS kernel driver attaches. Blackmagic Media Express nevertheless reports that it cannot find usable hardware. We have completed the first verified REA + Ghidra analysis of the driver, but we have **not** demonstrated successful video capture or an independent driver.
+> **Current status — native capture/playback interfaces recovered, frames pending.** The original capture hardware is visible over Thunderbolt/PCI Express, the legacy kernel driver attaches, and a new, self-authored native application enumerates the device and both video interfaces. Input and output mode activation tests return success, even though Blackmagic Media Express previously reported no usable hardware. We have **not** demonstrated actual video frame transfer or an independent replacement driver.
 
 ## What we want to repair
 
@@ -15,7 +15,7 @@ The tested setup includes:
 - **Comdis/i-tec THUNDERDOCK2** between the capture device and host.
 - **2011 Mac mini**, macOS **10.12.6 Sierra**, with **Desktop Video 10.4** installed.
 
-The device enumerates over Thunderbolt and PCI Express. macOS attaches the Blackmagic driver, including audio-related components, yet Media Express cannot enumerate a usable capture device. This is the software boundary we're investigating, not proof of broken hardware.
+The device enumerates over Thunderbolt and PCI Express. macOS attaches the Blackmagic driver, including audio-related components. **Our independently written native test can now enumerate the device, discover video formats, and temporarily enable/disable input and output modes.** Media Express's contradictory failure is an application-level symptom to investigate, not proof of broken hardware.
 
 ## The repair approach
 
@@ -37,10 +37,13 @@ The device enumerates over Thunderbolt and PCI Express. macOS attaches the Black
 | Vendor capture application | Media Express reports no usable Blackmagic hardware |
 | Binary inspection | 64-bit Intel Mach-O kernel extension with readable C++ symbols |
 | REA + Ghidra | First analysis successful, including readiness and firmware callbacks |
-| Video capture | **Not yet demonstrated** |
+| Native DeckLink program | Device enumerated as Intensity Extreme; both video interfaces and 16 modes each discovered |
+| Physical connectors | HDMI, component, composite, S-Video masks returned for input and output |
+| Video mode activation | 1080p25, 8-bit YUV input and 1080p25 output enabled and disabled successfully |
+| Video frame transfer | **Not yet demonstrated** |
 | Independent driver | **Not implemented** |
 
-The [hardware capability inventory](docs/hardware-capabilities.md) tracks every documented video, audio and conversion function, and [the investigation log](docs/investigation.md) records the verified reverse-engineering evidence. The complete copyrighted vendor binaries, firmware and their decompiler output are **not distributed here**.
+The [hardware capability inventory](docs/hardware-capabilities.md) tracks every documented video, audio and conversion function. Our tested [native C++ probe](src/decklink-enumerate.cpp) and [dated results](tests/2026-10-21-native-enumeration.md) show what is already usable through the installed driver. The [investigation log](docs/investigation.md) records the reverse-engineering evidence. The complete copyrighted vendor binaries, firmware and their decompiler output are **not distributed here**.
 
 ## Why this matters
 

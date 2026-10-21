@@ -69,6 +69,27 @@ Earlier, Media Express displayed **“Blackmagic hardware could not be found in 
 
 While constructing the test, an earlier experimental `QueryInterface` call failed because we incorrectly treated macOS's `CFUUIDBytes` argument as a pointer instead of a by-value aggregate. The test program crashed locally in the vendor API. We corrected that calling convention before obtaining the above successful result. Do not repeat the invalid invocation. The machine and driver remained intact.
 
+## Bounded activation smoke tests (same day)
+
+These require explicit opt-in flags; by default, the program performs read-only enumeration. They temporarily change capture or output mode and **do not** start streaming, deliver frames, record media, flash firmware, or write preferences.
+
+```sh
+./decklink-enumerate --smoke-input
+./decklink-enumerate --smoke-output
+```
+
+On the tested host:
+
+| Test | Request | Result |
+| --- | --- | --- |
+| Enable video input | 1080p25, 8-bit YUV | `S_OK` (`0x00000000`) |
+| Disable video input | Release temporary configuration | `S_OK` (`0x00000000`) |
+| Enable video output | 1080p25, default output flags | `S_OK` (`0x00000000`) |
+| Disable video output | Release temporary configuration | `S_OK` (`0x00000000`) |
+| Check busy state after smoke tests | Attribute `dbst` | `0x0` (idle) |
+
+**Interpretation:** Native SDK interfaces progressed beyond enumeration and accepted reversible capture/playback configuration. This is not proof of incoming signal, valid frames, playout, output conversion, or driver independence. Repeat only on an owned test device and ensure external sources/screens are safe for a mode change.
+
 ## Next checks
 
 1. Query optional, read-only device attributes and compare runtime interface availability to vendor application enumeration (basic I/O attributes now verified).

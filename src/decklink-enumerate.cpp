@@ -1,5 +1,6 @@
 // Fountain Coach — read-only DeckLink API enumeration probe.
 // Compiles without redistribution of Blackmagic SDK headers or frameworks.
+// Default is read-only. --smoke-input requests then releases one capture mode.
 // This tests the vendor API boundary; it does NOT replace the vendor driver.
 // Copyright (c) 2026 Benedikt Eickhoff and Fountain Coach contributors. MIT.
 #include <dlfcn.h>
@@ -22,6 +23,10 @@ typedef long (*GetDimension)(void*);
 typedef int32_t (*GetFrameRate)(void*, int64_t*, int64_t*);
 typedef int32_t (*GetAttributeInt)(void*, uint32_t, int64_t*);
 typedef int32_t (*DoesSupportVideoMode)(void*, uint32_t, uint32_t, uint32_t, uint32_t*, void**);
+typedef int32_t (*EnableVideoInput)(void*,uint32_t,uint32_t,uint32_t);
+typedef int32_t (*DisableVideoInput)(void*);
+static bool gSmokeInput = false;
+static bool gSmokeOutput = false;
 
 // API interface identifiers, not device registers or firmware bytes.
 static const unsigned char kInputIID[16] = {0xAF,0x22,0x76,0x2B,0xDF,0xAC,0x48,0x46,0xAA,0x79,0xFA,0x88,0x83,0x56,0x09,0x95};
@@ -113,13 +118,40 @@ static void probeInterface(void* device, const char* label, const unsigned char*
         printf("stage=modes name=%s count=%d\n", label, modeCount);
         ((ObjectRelease)modeTable[2])(modes);
     }
+    if (gSmokeInput && strcmp(label, "input") == 0) {
+        EnableVideoInput enable = (EnableVideoInput)table[6];
+        DisableVideoInput disable = (DisableVideoInput)table[7];
+        int32_t rc = enable(iface, 0x48703235, 0x32767579, 0); // 1080p25, 8-bit YUV
+        printf("stage=enable_input mode=1080p25 pixel=8bit_yuv status=0x%08x\n", (unsigned)rc);
+        fflush(stdout);
+        if (rc == 0) {
+            int32_t stop = disable(iface);
+            printf("stage=disable_input status=0x%08x\n", (unsigned)stop);
+        }
+    }
+    if (gSmokeOutput && strcmp(label, "output") == 0) {
+        typedef int32_t (*EnableVideoOutput)(void*,uint32_t,uint32_t);
+        typedef int32_t (*DisableVideoOutput)(void*);
+        EnableVideoOutput enable = (EnableVideoOutput)table[6];
+        DisableVideoOutput disable = (DisableVideoOutput)table[7];
+        int32_t rc = enable(iface, 0x48703235, 0); // 1080p25
+        printf("stage=enable_output mode=1080p25 status=0x%08x\n", (unsigned)rc);
+        fflush(stdout);
+        if (rc == 0) {
+            int32_t stop = disable(iface);
+            printf("stage=disable_output status=0x%08x\n", (unsigned)stop);
+        }
+    }
     ((ObjectRelease)table[2])(iface);
 }
 
 
-int main(void) {
+int main(int argc, char** argv) {
+    gSmokeInput = argc == 2 && strcmp(argv[1], "--smoke-input") == 0;
+    gSmokeOutput = argc == 2 && strcmp(argv[1], "--smoke-output") == 0;
+    if (argc > 2 || (argc == 2 && !gSmokeInput && !gSmokeOutput)) { fprintf(stderr,"usage: decklink-smoke [--smoke-input|--smoke-output]\n"); return 64; }
     const char* library = "/Library/Frameworks/DeckLinkAPI.framework/DeckLinkAPI";
-    printf("probe: DeckLink API, read-only device enumeration\n");
+    printf("probe: DeckLink API, %s\n", (gSmokeInput || gSmokeOutput) ? "bounded temporary video-mode activation" : "read-only device enumeration");
     fflush(stdout);
     void* handle = dlopen(library, RTLD_NOW | RTLD_LOCAL);
     if (!handle) {
