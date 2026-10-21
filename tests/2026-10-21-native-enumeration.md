@@ -32,6 +32,14 @@ Compile **on a supported legacy macOS host with the installed DeckLink API frame
 - `QueryInterface` for **IDeckLinkOutput**: success.
 - `GetDisplayModeIterator` for output: success; **16 modes**.
 - No unexpected signal or exception during this corrected test.
+- **IDeckLinkAttributes** interface queried successfully through the SDK.
+- **Video I/O support**: `0x3` — both capture and playback advertised.
+- **Input connectors**: `0x3a` — HDMI, component, composite and S-Video advertised.
+- **Output connectors**: `0x3a` — HDMI, component, composite and S-Video advertised.
+- **Maximum audio channels**: `2`.
+- **Device busy state**: `0x0` (idle during this query).
+
+These values were reported by the installed runtime on the tested hardware. They do not by themselves demonstrate that every connector passes a signal.
 
 Both input and output iterators advertised the following formats. The SDK-reported frame rates here are the *field rates for interlaced formats* only where the interface reports them; they do not guarantee capture or playout:
 
@@ -62,7 +70,7 @@ While constructing the test, an earlier experimental `QueryInterface` call faile
 
 ## Next checks
 
-1. Query read-only device attributes and compare runtime interface availability to vendor application enumeration.
+1. Query optional, read-only device attributes and compare runtime interface availability to vendor application enumeration (basic I/O attributes now verified).
 2. Where safe, request supported pixel formats/modes without enabling input/output.
 3. Check actual signal presence and compile a bounded video-frame probe with explicit timeouts.
 4. For each physical connector (HDMI, component, composite, S-Video, analog audio), record a controlled signal test separately.

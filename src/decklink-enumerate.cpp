@@ -20,10 +20,39 @@ typedef int32_t (*GetModeName)(void*, CFStringRef*);
 typedef uint32_t (*GetModeCode)(void*);
 typedef long (*GetDimension)(void*);
 typedef int32_t (*GetFrameRate)(void*, int64_t*, int64_t*);
+typedef int32_t (*GetAttributeInt)(void*, uint32_t, int64_t*);
 
 // API interface identifiers, not device registers or firmware bytes.
 static const unsigned char kInputIID[16] = {0xAF,0x22,0x76,0x2B,0xDF,0xAC,0x48,0x46,0xAA,0x79,0xFA,0x88,0x83,0x56,0x09,0x95};
 static const unsigned char kOutputIID[16] = {0xCC,0x5C,0x8A,0x6E,0x3F,0x2F,0x4B,0x3A,0x87,0xEA,0xFD,0x78,0xAF,0x30,0x05,0x64};
+static const unsigned char kAttributesIID[16] = {0xAB,0xC1,0x18,0x43,0xD9,0x66,0x44,0xCB,0x96,0xE2,0xA1,0xCB,0x5D,0x31,0x35,0xC4};
+
+static void probeAttributes(void* device) {
+    QueryInterface query = (QueryInterface)(*(void***)device)[0];
+    CFUUIDBytes uuid;
+    memcpy(&uuid, kAttributesIID, sizeof(uuid));
+    void* attributes = NULL;
+    int32_t status = query(device, uuid, &attributes);
+    printf("stage=query_attributes status=0x%08x present=%d\n", (unsigned)status, attributes != NULL);
+    if (!attributes) return;
+    void** table = *(void***)attributes;
+    GetAttributeInt getInt = (GetAttributeInt)table[4];
+    struct Key { const char* name; uint32_t id; };
+    const Key keys[] = {
+        {"video_io_support", 0x76696f73},
+        {"video_input_connections", 0x7669636e},
+        {"video_output_connections", 0x766f636e},
+        {"maximum_audio_channels", 0x6d616368},
+        {"device_busy_state", 0x64627374}
+    };
+    for (const Key& key : keys) {
+        int64_t value = 0;
+        status = getInt(attributes, key.id, &value);
+        printf("stage=attribute name=%s status=0x%08x value=0x%llx\n", key.name, (unsigned)status, (unsigned long long)value);
+    }
+    ((ObjectRelease)table[2])(attributes);
+}
+
 
 static void probeInterface(void* device, const char* label, const unsigned char* iid) {
     void** deviceVtable = *(void***)device;
@@ -122,6 +151,7 @@ int main(void) {
                 else printf("stage=device_model status=conversion_error\n");
                 CFRelease(model);
             } else printf("stage=device_model status=0x%08x\n", (unsigned int)result);
+            probeAttributes(device);
             probeInterface(device, "input", kInputIID);
             probeInterface(device, "output", kOutputIID);
             ObjectRelease releaseDevice = (ObjectRelease)deviceVtable[2];
