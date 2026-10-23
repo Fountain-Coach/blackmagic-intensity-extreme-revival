@@ -6,7 +6,7 @@ A video-capture device does not stop being useful simply because its manufacture
 
 Inspired by the practical spirit of a *Repair Café*: understand what is broken, share what we learn, and make functioning equipment useful for longer.
 
-> **Current status — native capture/playback APIs recovered; HDMI receiver not locked.** Our self-authored programs enumerate the device, negotiate input and output modes, and submit a generated playback frame through the installed legacy driver. With a Mac mini or MacBook HDMI source connected, capture can start, but the driver reports **no input signal lock** at 1080p30 and delivers no frames. A temporary 720p60 source-mode test likewise produced no frames. With Blackmagic HDMI OUT physically looped into HDMI IN, native tests established **half-duplex behavior**: whichever capture/playback mode was enabled second was rejected. Physical signal transfer and an independent replacement driver remain unverified.
+> **Current status — native capture/playback APIs recovered; HDMI receiver not locked.** Our self-authored programs enumerate the device, negotiate input and output modes, and submit a generated playback frame through the installed legacy driver. Earlier capture tests with external HDMI sources reported **no input signal lock** at 1080p30 and no valid frames; a temporary 720p60 test also failed. On 23 October, a new bounded 1080p30 test received **83 video callbacks, but every frame was explicitly flagged as having no input source** (zero valid frames, signal lock false). Source signal presence during this retest was not independently verified; missing lock is not by itself proof of failed receiver hardware. With Blackmagic HDMI OUT physically looped into HDMI IN, native tests established **half-duplex behavior**: whichever capture/playback mode was enabled second was rejected. Physical signal transfer and an independent replacement driver remain unverified.
 
 ## Try the software simulation — no additional hardware required
 
@@ -61,11 +61,15 @@ The device enumerates over Thunderbolt and PCI Express. macOS attaches the Black
 | HDMI self-loop signal | Mac mini display identifies BMD HDMI at 1080p30; legacy configuration selects HDMI input (`0x2`) |
 | HDMI receiver signal lock | **False during active 1080p30 capture** with an external computer source |
 | Simultaneous capture and playback | **Rejected** whichever direction was enabled second (half-duplex); generated HDMI self-loop cannot function |
-| Input stream callback | 1080p25, 1080p30 and temporary 720p60 capture tests: no frames received |
+| Input stream callback | Earlier 1080p25/30 and 720p60 tests produced no valid frames. The 23 October 1080p30 retest delivered **83 no-source callbacks**, **0 valid frames**, no signal lock; clean stream teardown. |
 | Input frame capture / physical output verification | **Not yet demonstrated** |
-| Independent driver | **Not implemented** |
+| Independent driver | Source-owned PCI inventory probe passed on Sierra; passive IOKit kernel bundle builds and passes **offline linkage validation**, but has **not been installed, loaded, or used for actual capture**. |
 
 The [confirmed half-duplex loopback result](tests/2026-10-21-half-duplex-loopback.md) supersedes the [earlier proposed MacBook HDMI self-loop](tests/2026-10-21-macbook-hdmi-source.md). The earlier report documents the MacBook HDMI source and the now-disproven self-loop hypothesis. The [hardware capability inventory](docs/hardware-capabilities.md) tracks every documented video, audio and conversion function. The [native enumeration probe](src/decklink-enumerate.cpp), [single-frame output experiment](src/decklink-output-frame.cpp), and [bounded input observer](src/decklink-input-observer.cpp) demonstrate the progressively recovered interface. The [dated enumeration](tests/2026-10-21-native-enumeration.md), [output](tests/2026-10-21-single-frame-output.md), [input](tests/2026-10-21-input-callback.md), and [HDMI loopback diagnostics](tests/2026-10-21-hdmi-self-loop.md) logs separate successful API calls from unverified physical signals. The [investigation log](docs/investigation.md) records the reverse-engineering evidence. The complete copyrighted vendor binaries, firmware and their decompiler output are **not distributed here**.
+
+## Independent driver milestone — 23 October 2026
+
+We restored access to the physical Sierra hardware host and tested our source-owned [read-only PCI inventory](src/intensity-pci-inventory.c) there: `IOPCIDevice` `0xBDBD:0xA124` detected, one match, clean exit. The first [passive IOKit kernel driver](driver/sierra/passive/) now builds *from a fresh repository checkout on Sierra* and passes Apple's `kextutil -n -t -z` **offline** dependency and structural validation. It has no automatic matching personality, is unsigned, and was **not loaded or installed**. Both original Blackmagic drivers remain in place. See the [Sierra driver smoke test](tests/2026-10-23-sierra-independent-driver-smoke.md) and [new HDMI no-source callback evidence](tests/2026-10-23-hdmi-no-source-callback-retest.md). The independent hardware protocol, DMA, interrupts and physical capture remain unimplemented and unverified.
 
 ## Why this matters
 
