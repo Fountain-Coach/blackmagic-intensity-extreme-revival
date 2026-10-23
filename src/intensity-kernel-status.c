@@ -90,7 +90,11 @@ int main(void) {
         kern_return_t parent_result=IORegistryEntryGetParentEntry(
             service,kIOServicePlane,&parent);
         uint32_t vendor=0,device=0;
-        bool ids=parent_result==KERN_SUCCESS &&
+        io_name_t parent_class={0};
+        bool pci_parent=parent_result==KERN_SUCCESS &&
+            IOObjectGetClass(parent,parent_class)==KERN_SUCCESS &&
+            strcmp(parent_class,"IOPCIDevice")==0;
+        bool ids=pci_parent &&
             pci_id(parent,CFSTR("vendor-id"),&vendor) &&
             pci_id(parent,CFSTR("device-id"),&device);
         printf("stage=vendor_service attached=1 parent_pci=%u vendor=0x%04x device=0x%04x\n",
