@@ -53,3 +53,20 @@ The unsigned status is expected for this noninstalled bundle, not a passing code
 - No physical HDMI frame has been captured by an independent driver.
 
 Next: independently document the known PCI resources and hardware initialization protocol from evidence, maintain a tested rollback path, and only then plan a controlled nonproduction kernel-attachment experiment.
+
+## Additional D3 compile-only resource gate — same day
+
+The source-owned [passive driver class](../driver/sierra/passive/FCIntensityPCIDiagnostic.cpp) was extended to call **`IOPCIDevice::getDeviceMemoryWithRegister`** for BAR0 and BAR1, then validate both provider-owned descriptor lengths against the **1,048,576 bytes** measured by the independent live I/O Registry probe. It does not call `mapDeviceMemoryWithRegister` and does not read or write the BAR content.
+
+A fresh Git checkout on the Sierra host successfully rebuilt the source with Xcode 9.2, `-Wall -Wextra -Werror` and the explicit legacy-SDK warning suppression. Offline validation of that exact compiled bundle again reported:
+
+```text
+Mach-O 64-bit kext bundle x86_64
+Info.plist: OK
+Code Signing Failure: not code signed
+... appears to be loadable (including linkage for on-disk libraries).
+offline_validation_exit=0
+own_driver_not_loaded
+```
+
+The original Blackmagic 10.4 kernel drivers were still loaded after this check. **This verifies source compatibility and offline linkage only**, not runtime access to the descriptors. The existing Xcode `libkmod` 10.13-vs-10.12 minimum-version warning remains unresolved.
