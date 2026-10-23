@@ -38,13 +38,14 @@ New structured evidence files retained **only on the private analysis host**, no
 - `evidence/2026-10-23-dma-start.json`: start-next-transaction path at `0x19856`.
 - `evidence/2026-10-23-dma-irq.json`: interrupt path at `0x1b2a0`.
 - `evidence/2026-10-23-dma-complete.json`: completion path at `0x19892`.
+- `evidence/2026-10-23-dma-new-frame.json`: frame DMA transaction creation at `0x1a292`.
 
 ### Reconstructed behavior, not a hardware register contract
 
 | Stage | Evidence-derived behavior | What is still missing |
 | --- | --- | --- |
 | Firmware gate | Earlier `firmwareHasDownloaded` analysis conditionally checks a hardware-usable result before initializing DMA and video support components. | No independently measured hardware-usable result or validated write sequence |
-| DMA preparation | The vendor DMA-support class allocates a transaction table and kernel memory descriptors, and prepares memory-backed buffers. Failure paths exist at several allocation/preparation operations. | Exact ABI, ownership and negotiated transfer geometry for this hardware |
+| DMA preparation | The vendor DMA-support class allocates a transaction table and kernel memory descriptors, and prepares memory-backed buffers. Frame-transaction construction distinguishes queued/reusable transaction elements and persistent mappings; paths can construct `IOMemoryDescriptor` objects from supplied address ranges. Allocation and preparation have explicit failures. | Exact ABI, verified map ownership, buffer scatter/gather layout, and negotiated transfer geometry for this hardware |
 | Start-next | The driver checks for a queued transaction and a not-already-started state before calling a hardware abstraction method. | Target of the indirect call and resulting PCI register/address mapping |
 | Interrupt | The handler reads status indirectly, may detect a completed transaction, and propagates events separately to video output and input services. | Validated interrupt source, acknowledgement, completion flags and sequence units |
 | Completion | An existing active transaction is handed to a disposal/completion routine. | Exact release, reuse and cancellation guarantees |
