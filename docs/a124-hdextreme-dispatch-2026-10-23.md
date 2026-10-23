@@ -54,7 +54,7 @@ We have **not independently resolved the exact indirect I/O Kit mapping method, 
 
 ## Video DMA implications
 
-The HDExtreme class has its own `DMAGetAddressForCapture` (image-relative `0x2f720`) and `DMASizeofScatterGatherBuffer` (`0x2f786`) entries. The latter calls into the HD base implementation and conditionally raises scatter/gather buffer requirements depending on capability/mode flags, rather than supplying a single unconditional size.
+The HDExtreme class has its own `DMAGetAddressForCapture` (image-relative `0x2f720`) and `DMASizeofScatterGatherBuffer` (`0x2f786`) entries. Private decompilation of **both** confirms **capability-dependent branches**: the first returns different capture address/selector values depending on capture format and mode, with a fallback to an inherited HDPro implementation; the second calls into the HD base implementation and conditionally raises scatter/gather buffer requirements. Thus neither the capture address nor scatter/gather buffer size is an unconditional hardware constant. The meaning and bus/register space of returned address values have not been established experimentally.
 
 This means the independent driver must explicitly negotiate and validate DMA descriptor geometry and buffer ownership. It is unsafe to hardcode a scatter/gather size based solely on a nominal video resolution or one decompiler output. DMA completion and interrupt behaviors were separately documented in [D3 DMA evidence](dma-protocol-evidence-2026-10-23.md).
 
