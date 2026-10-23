@@ -58,6 +58,14 @@ The HDExtreme class has its own `DMAGetAddressForCapture` (image-relative `0x2f7
 
 This means the independent driver must explicitly negotiate and validate DMA descriptor geometry and buffer ownership. It is unsafe to hardcode a scatter/gather size based solely on a nominal video resolution or one decompiler output. DMA completion and interrupt behaviors were separately documented in [D3 DMA evidence](dma-protocol-evidence-2026-10-23.md).
 
+## Detected HDMI mode: a distinct readiness and signal gate
+
+The model-specific `HDExtreme::VideoInputGetDetectedInputFormat` (image-relative `0x2d1ec`) delegates model code `0x36` to the *base* `HardwareAbstractionDeckLink::VideoInputGetDetectedInputFormat` (`0x101da`). The HDExtreme overrides are special cases for different model codes and must not be applied here.
+
+Private reconstruction of the base path shows that mode detection checks **multiple state/feature prerequisites**, makes an indirect status-register read, requires a reported status flag, and then matches encoded timing information against supported format entries. A failure anywhere can result in no detected input mode. **This is not proof that the HDMI receiver itself is faulty.** The exact live values of the readiness flags and register status have not been measured.
+
+The 23 October vendor-API observer obtained 83 callbacks, all explicitly `no-source`; it reported `signal_locked=false` and zero valid frames. We must confirm the physical unprotected source and distinguish no signal, unsupported timing and incomplete firmware/hardware readiness before writing our own HDMI controller logic.
+
 ## Exact remaining engineering gates
 
 1. Determine the identified `HDExtreme` capture-DMA address routine's semantics and verify the applicable descriptor layout, mapping method, and interrupt/status register roles.
