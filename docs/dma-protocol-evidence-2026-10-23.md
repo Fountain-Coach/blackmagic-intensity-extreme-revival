@@ -39,6 +39,9 @@ New structured evidence files retained **only on the private analysis host**, no
 - `evidence/2026-10-23-dma-irq.json`: interrupt path at `0x1b2a0`.
 - `evidence/2026-10-23-dma-complete.json`: completion path at `0x19892`.
 - `evidence/2026-10-23-dma-new-frame.json`: frame DMA transaction creation at `0x1a292`.
+- `evidence/2026-10-23-hardware-abstraction-procedures.json`: 509 matching hardware-abstraction procedure symbols, including several hardware-specific variants.
+- `evidence/2026-10-23-pcie-abstraction-init.json`: candidate PCI Express implementation initialization at `0x266e2`.
+- `evidence/2026-10-23-pcie-init-xrefs.json` and `evidence/2026-10-23-pcie-constructor-xrefs.json`: virtual method and constructor-reference evidence; no confirmed `A124` dispatch yet.
 
 ### Reconstructed behavior, not a hardware register contract
 
@@ -55,6 +58,12 @@ New structured evidence files retained **only on the private analysis host**, no
 ## PCI resource context
 
 The separately validated, read-only [PCI descriptor probe](../src/intensity-pci-resources.c) found **two 1 MiB** PCI memory resource descriptors at configuration offsets `0x10` and `0x14`. Their individual functions have **not** been established. The independent driver must not read or write unknown BAR memory or enable bus mastering as an exploratory shortcut.
+
+## Candidate PCI Express memory map — *not yet device-specific*
+
+The privately inspected `HardwareAbstractionDeckLinkPCIExpress::Init` procedure (image-relative `0x266e2`) makes a map-like indirect call on an `IOPCIDevice` with register argument `0x10`. It obtains an address from the returned object and derives a collection of control/status pointer locations from that base (including offsets within the first `0x8000` bytes). That is consistent with the independently observed PCI resource beginning at configuration offset `0x10` and is **evidence for a BAR0 register-mapping hypothesis**.
+
+It is **not yet proof** of the exact I/O Kit method being called, the underlying PCI address translation, or that the `A124` hardware actually chooses this particular subclass. Multiple hardware-abstraction subclasses exist in this binary. The second PCI BAR at `0x14` remains functionally unassigned. No derived address is permissible for live access based only on this observation.
 
 ## Evidence gates for the next real driver operation
 
