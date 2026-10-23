@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleDevelopmentRegion</key><string>en</string>
+  <key>CFBundleExecutable</key><string>FCIntensityPCIDiagnostic</string>
+  <key>CFBundleIdentifier</key><string>coach.fountain.intensity.PCIDiagnostic</string>
+  <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+  <key>CFBundleName</key><string>FCIntensityPCIDiagnostic</string>
+  <key>CFBundlePackageType</key><string>KEXT</string>
+  <key>CFBundleShortVersionString</key><string>0.1.0</string>
+  <key>CFBundleVersion</key><string>1</string>
+  <key>OSBundleLibraries</key>
+  <dict>
+    <key>com.apple.kpi.iokit</key><string>16.0</string>
+    <key>com.apple.iokit.IOPCIFamily</key><string>2.9</string>
+    <key>com.apple.kpi.libkern</key><string>16.0</string>
+    <key>com.apple.kpi.mach</key><string>16.0</string>
+  </dict>
+  <!-- Intentionally NO IOKitPersonality: the bundle cannot auto-match PCI
+       hardware. The vendor driver remains the sole hardware owner. -->
+  <key>IOKitPersonalities</key><dict/>
+</dict>
+</plist>
