@@ -59,11 +59,13 @@ New structured evidence files retained **only on the private analysis host**, no
 
 The separately validated, read-only [PCI descriptor probe](../src/intensity-pci-resources.c) found **two 1 MiB** PCI memory resource descriptors at configuration offsets `0x10` and `0x14`. Their individual functions have **not** been established. The independent driver must not read or write unknown BAR memory or enable bus mastering as an exploratory shortcut.
 
-## Candidate PCI Express memory map — *not yet device-specific*
+## A124-specific HDExtreme dispatch and PCI BAR0 candidate
 
-The privately inspected `HardwareAbstractionDeckLinkPCIExpress::Init` procedure (image-relative `0x266e2`) makes a map-like indirect call on an `IOPCIDevice` with register argument `0x10`. It obtains an address from the returned object and derives a collection of control/status pointer locations from that base (including offsets within the first `0x8000` bytes). That is consistent with the independently observed PCI resource beginning at configuration offset `0x10` and is **evidence for a BAR0 register-mapping hypothesis**.
+**Correction to the earlier generic PCI Express hypothesis:** Static `DeckLink_Driver::start` analysis, verified against the exact private binary with our [SHA-pinned model-dispatch parser](../scripts/inspect_private_model_dispatch.py), places `0xA124` at model table entry **54** with model code **`0x36`**. This branch constructs `HardwareAbstractionDeckLinkHDExtreme`, and that class's own initialization routine handles code `0x36`. The generic `HardwareAbstractionDeckLinkPCIExpress::Init` path is **not sufficient evidence of this model's configuration**.
 
-It is **not yet proof** of the exact I/O Kit method being called, the underlying PCI address translation, or that the `A124` hardware actually chooses this particular subclass. Multiple hardware-abstraction subclasses exist in this binary. The second PCI BAR at `0x14` remains functionally unassigned. No derived address is permissible for live access based only on this observation.
+The actual HDExtreme implementation's initialization also calls a map-like method on the IOPCIDevice with argument `0x10` and derives register/control pointers from the returned mapped address. Together with the live PCI resource inventory, this supports a **model-specific static BAR0 control-aperture hypothesis**. The exact indirect I/O Kit method, runtime class identity, register roles, and second BAR remain unverified. Our software has neither mapped nor accessed either BAR.
+
+See [the verified A124 dispatch and HDExtreme evidence](a124-hdextreme-dispatch-2026-10-23.md). Do not substitute a plausible register address for live proof or enable speculative PCI bus-master/DMA writes.
 
 ## Evidence gates for the next real driver operation
 
