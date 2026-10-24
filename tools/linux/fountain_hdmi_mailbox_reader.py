@@ -11,6 +11,8 @@ reject overwritten/torn frames. HTTP POST stays on container localhost.
 """
 import argparse
 import ctypes
+import fcntl
+import struct
 import hashlib
 import json
 import os
@@ -96,12 +98,20 @@ def run(device, token_file, poll, max_seconds):
     if not hasattr(os, "O_DIRECT"):
         raise RuntimeError("Linux direct I/O support is mandatory")
     fd = os.open(device, os.O_RDONLY | os.O_DIRECT)
+    # xhyve opens the host backing file read-only, but that alone did not
+    # set Linux BLKROGET. Refuse to run unless guest init explicitly executes
+    # 'blockdev --setro /dev/vdb'. Container --device=:r is a second guard.
+    ro=struct.unpack("i",fcntl.ioctl(fd, 0x125e, struct.pack("i",0)))[0]
+    if ro!=1:
+        os.close(fd)
+        raise RuntimeError("Guest virtual mailbox must be blockdev read-only")
     endpoint = "http://127.0.0.1:8273/api/scratch/ingest"
     deadline = time.monotonic() + max_seconds if max_seconds else None
     last_seq = 0
     delivered = 0
     missed = 0
     started = time.monotonic()
+    last_activity=started
     try:
         # Do not replay stale, private desktop material on daemon restart.
         starting = [slot_header(fd, s) for s in range(SLOT_COUNT)]
@@ -132,12 +142,17 @@ def run(device, token_file, poll, max_seconds):
                     break
                 last_seq = seq
                 delivered += 1
+                last_activity=time.monotonic()
                 if delivered <= 4 or delivered % 15 == 0:
                     print("stage=guest_hdmi_mailbox accepted=%d host_seq=%d "
                           "scratch_seq=%d jpeg_bytes=%d sha256=%s" %
                           (delivered,seq,ack,len(payload),
                            hashlib.sha256(payload).hexdigest()),flush=True)
-            time.sleep(poll)
+            # Active capture needs the short poll; idle virtio reads should
+            # not constantly wake the old 2011 hypervisor and starve vda.
+            idle=time.monotonic()-last_activity
+            interval = poll if idle < 1.5 else max(poll, 0.35 if idle<5 else 0.75)
+            time.sleep(interval)
         print("stage=guest_hdmi_mailbox result=stopped delivered=%d "
               "latest_host_seq=%d stale_or_torn=%d elapsed=%.2f" %
               (delivered,last_seq,missed,time.monotonic()-started),flush=True)
