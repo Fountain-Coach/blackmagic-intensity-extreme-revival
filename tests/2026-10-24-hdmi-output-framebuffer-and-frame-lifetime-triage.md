@@ -29,6 +29,14 @@ Witness on the silver Mac:
 
 Different SHA-256 hashes establish that **the Mac's display framebuffer is actually changing**. This is more than an EDID-only fixture, but it does NOT prove HDMI electrical transmission, color format on the wire, receiver signal lock, or a captured hardware frame.
 
+Additional source-owned read-only tool: tools/sierra/hdmi-edid-capability-witness.pl.
+
+It independently validates both 128-byte EDID checksum blocks and the Consumer Technology Association extension, without changing display settings:
+
+    stage=hdmi_edid result=valid bytes=256 blocks=2 cta_blocks=1 cta_revision=3 cta_flags=0x77 base_checksum=0 advertised_ycbcr_422=1 advertised_ycbcr_444=1 basic_audio=1 actual_hdmi_wire_encoding=not_measured
+
+Thus the sink **advertises** YCbCr 4:2:2 and 4:4:4 capabilities, and the EDID data is internally checksummed. These flags do not reveal whether the Mac's actual HDMI wire signal is RGB, YCbCr 4:2:2 or YCbCr 4:4:4. They also cannot prove capture-side clock lock, HDCP status or valid pixels. This new check runs in the unified physical preflight (`edid_caps=1`).
+
 ## Legacy vendor frame-destruction crash
 
 The single physical-input test requested exact mode 0x48703330 (1080p30), matching the Mac's current output. Its DeckLink SetCallback, EnableVideoInput and StartStreams calls each returned S_OK. The initial vendor signal-lock query reported false; detected-mode retrieval returned error 0x80000001. The observer then terminated with SIGSEGV on the **vendor notification thread** before valid received pixels could be verified.
