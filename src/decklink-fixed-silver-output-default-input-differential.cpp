@@ -124,25 +124,31 @@ int main(int argc,char**argv) {
   } else {
     Sample a1=probe(input,status,"A1");
     if(a1.disableRc||a1.enableRc||!a1.observed||interrupted)result=26;
-    bool changed=false,restored=false;
+    bool setSucceeded=false,changed=false,restored=false;
     Sample b={false,false,0,0,0},a2={false,false,0,0,0};
     if(!result) {
       rc=set(cfg,DVOM,HP30);
+      setSucceeded=rc==0;
       int64_t actual=0,stillBlack=0;
       int32_t r1=get(cfg,DVOM,&actual),r2=get(cfg,VOIO,&stillBlack);
-      changed=rc==0&&r1==0&&r2==0&&(uint32_t)actual==HP30&&
+      changed=setSucceeded&&r1==0&&r2==0&&(uint32_t)actual==HP30&&
               (uint32_t)stillBlack==BLACK;
       printf("stage=hdmi_idle_input_differential volatile_mode_set rc=0x%08x "
-             "verified=%u preferences_written=0 idle_black=%u\n",
-             (unsigned)rc,changed?1:0,(uint32_t)stillBlack==BLACK?1:0);
+             "verified=%u read_mode_rc=0x%08x read_idle_rc=0x%08x "
+             "preferences_written=0 idle_black=%u\n",
+             (unsigned)rc,changed?1:0,(unsigned)r1,(unsigned)r2,
+             r2==0&&(uint32_t)stillBlack==BLACK?1:0);
       if(changed&&!interrupted)b=probe(input,status,"B");
       else result=27;
     }
-    // Roll back the exact setting only if its ownership has not changed.
-    if(changed) {
+    // Even an unsuccessful readback MUST NOT skip rollback after SetInt.
+    // Never write vendor preferences and never touch any other config key.
+    if(setSucceeded) {
       int64_t actual=0,stillBlack=0;
-      if(!get(cfg,DVOM,&actual)&&!get(cfg,VOIO,&stillBlack)&&
-         (uint32_t)actual==HP30&&(uint32_t)stillBlack==BLACK) {
+      int32_t checkModeRc=get(cfg,DVOM,&actual);
+      int32_t checkIdleRc=get(cfg,VOIO,&stillBlack);
+      if(checkModeRc==0&&checkIdleRc==0&&(uint32_t)actual==HP30&&
+         (uint32_t)stillBlack==BLACK) {
         int32_t back=set(cfg,DVOM,HI50);
         int64_t checkMode=0,checkIdle=0;
         restored=back==0&&!get(cfg,DVOM,&checkMode)&&
@@ -150,8 +156,19 @@ int main(int argc,char**argv) {
                  (uint32_t)checkIdle==BLACK;
         printf("stage=hdmi_idle_input_differential volatile_rollback rc=0x%08x verified=%u\n",
                (unsigned)back,restored?1:0);
+      } else {
+        printf("stage=hdmi_idle_input_differential rollback=GUARDED_OUT "
+               "mode_read_rc=0x%08x idle_read_rc=0x%08x observed_mode=0x%08x "
+               "observed_idle=0x%08x\n",
+               (unsigned)checkModeRc,(unsigned)checkIdleRc,
+               (unsigned)(uint32_t)actual,(unsigned)(uint32_t)stillBlack);
       }
       if(!restored)result=50;
+    } else if(!result) {
+      // The first probe may have failed before any configuration write.
+      int64_t actual=0,stillBlack=0;
+      restored=!get(cfg,DVOM,&actual)&&!get(cfg,VOIO,&stillBlack)&&
+               (uint32_t)actual==HI50&&(uint32_t)stillBlack==BLACK;
     }
     if(restored&&!interrupted) {
       a2=probe(input,status,"A2");
