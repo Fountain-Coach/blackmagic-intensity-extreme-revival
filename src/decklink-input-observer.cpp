@@ -20,6 +20,8 @@ typedef int32_t (*GetInt)(void*, uint32_t, int64_t*);
 typedef int32_t (*GetCount)(void*, uint32_t*);
 typedef uint32_t (*GetFlags)(void*);
 typedef long (*GetDimension)(void*);
+typedef int32_t (*GetFrameBytes)(void*, void**);
+typedef int32_t (*GetStreamTime)(void*, int64_t*, int64_t*, int64_t);
 static const unsigned char statusIID[16]={0x5f,0x55,0x82,0x00,0x40,0x28,0x49,0xbc,0xbe,0xac,0xdb,0x3f,0xa4,0xa9,0x6e,0x46};
 static const unsigned char inputIID[16]={0xaf,0x22,0x76,0x2b,0xdf,0xac,0x48,0x46,0xaa,0x79,0xfa,0x88,0x83,0x56,0x09,0x95};
 static const unsigned char callbackIID[16]={0xdd,0x04,0xe5,0xec,0x74,0x15,0x42,0xab,0xae,0x4a,0xe8,0x0c,0x4d,0xfc,0x04,0x4a};
@@ -32,6 +34,12 @@ struct Observer {
     std::atomic<uint32_t> valid;
     std::atomic<uint32_t> noSource;
     std::atomic<uint32_t> formatChanges;
+    /* First valid frame only; no frame buffer is retained. */
+    std::atomic<uint32_t> firstFrameBytesOk, firstFrameWidth;
+    std::atomic<uint32_t> firstFrameHeight, firstFrameRowBytes;
+    std::atomic<uint32_t> firstFrameSampleCount, firstFrameSampleHash;
+    std::atomic<uint32_t> firstFrameTimeOk;
+    std::atomic<int64_t> firstFrameTime, firstFrameDuration;
 };
 static uint32_t addRef(Observer* s) {return ++s->refs;}
 static uint32_t releaseRef(Observer* s) {return --s->refs;}
@@ -50,8 +58,42 @@ static int32_t onFrame(Observer* s, void* video, void*) {
     ++s->frames;
     void** vt=*(void***)video;
     uint32_t flags=((GetFlags)vt[7])(video);
-    if (flags & 0x80000000U) ++s->noSource;
-    else ++s->valid;
+    if (flags & 0x80000000U) {
+        ++s->noSource;
+        return 0;
+    }
+    if (s->valid.fetch_add(1) != 0) return 0;
+    const long width = ((GetDimension)vt[3])(video);
+    const long height = ((GetDimension)vt[4])(video);
+    const long rowBytes = ((GetDimension)vt[5])(video);
+    if (width > 0 && width <= 8192 && height > 0 && height <= 8192 &&
+        rowBytes > 0 && rowBytes <= 65536) {
+        s->firstFrameWidth.store((uint32_t)width);
+        s->firstFrameHeight.store((uint32_t)height);
+        s->firstFrameRowBytes.store((uint32_t)rowBytes);
+        void* bytes = nullptr;
+        const int32_t brc = ((GetFrameBytes)vt[8])(video, &bytes);
+        if (brc == 0 && bytes) {
+            const size_t total = (size_t)rowBytes * (size_t)height;
+            const size_t count = total < 4096 ? total : 4096;
+            const uint8_t* p = (const uint8_t*)bytes;
+            uint32_t hash = 2166136261u;
+            for (size_t i=0; i<count; ++i) {
+                hash ^= (uint32_t)p[i];
+                hash *= 16777619u;
+            }
+            s->firstFrameSampleCount.store((uint32_t)count);
+            s->firstFrameSampleHash.store(hash);
+            s->firstFrameBytesOk.store(count > 0 ? 1u : 0u);
+        }
+    }
+    int64_t time=0, duration=0;
+    const int32_t trc = ((GetStreamTime)vt[11])(video, &time, &duration, 30000);
+    if (trc == 0 && duration > 0) {
+        s->firstFrameTime.store(time);
+        s->firstFrameDuration.store(duration);
+        s->firstFrameTimeOk.store(1u);
+    }
     return 0;
 }
 static void* callbackTable[5]={
@@ -88,6 +130,11 @@ int main(int argc, char** argv) {
     obs.vtable=callbackTable;
     obs.refs.store(1); obs.frames.store(0); obs.valid.store(0);
     obs.noSource.store(0); obs.formatChanges.store(0);
+    obs.firstFrameBytesOk.store(0); obs.firstFrameWidth.store(0);
+    obs.firstFrameHeight.store(0); obs.firstFrameRowBytes.store(0);
+    obs.firstFrameSampleCount.store(0); obs.firstFrameSampleHash.store(0);
+    obs.firstFrameTimeOk.store(0); obs.firstFrameTime.store(0);
+    obs.firstFrameDuration.store(0);
     bool callbackInstalled=false, enabled=false, streams=false;
     int exitCode=0;
     rc=((SetCallback)ivt[17])(input,&obs);
@@ -119,6 +166,29 @@ int main(int argc, char** argv) {
         fflush(stdout);
     }
     sleep(3);
+    {
+        /* Post-observation lock check via the vendor status interface.
+         * Never maps or reads PCI registers directly.
+         */
+        void* st = nullptr;
+        CFUUIDBytes statusUUID;
+        memcpy(&statusUUID, statusIID, 16);
+        int32_t src = ((Query)devV[0])(device, statusUUID, &st);
+        if (!src && st) {
+            void** svt = *(void***)st;
+            bool locked = false;
+            int64_t detected = 0;
+            int32_t lrc = ((GetFlag)svt[3])(st, 0x7669736c, &locked);
+            int32_t mrc = ((GetInt)svt[4])(st, 0x6476696d, &detected);
+            printf("stage=signal_lock_final rc=0x%08x locked=%d detected_mode_rc=0x%08x mode=0x%llx\n",
+                   (unsigned)lrc, locked, (unsigned)mrc, (unsigned long long)detected);
+            ((Release)svt[2])(st);
+        } else {
+            printf("stage=signal_lock_final rc=0x%08x locked=0 status_interface_present=0\n",
+                   (unsigned)src);
+        }
+        fflush(stdout);
+    }
 cleanup:
     if(streams) {
         rc=((NoArg)ivt[14])(input);
@@ -137,6 +207,12 @@ cleanup:
     }
     printf("stage=counts frames=%u valid=%u no_source=%u format_changes=%u observer_refcount=%u\n",
         obs.frames.load(),obs.valid.load(),obs.noSource.load(),obs.formatChanges.load(),obs.refs.load());
+    printf("stage=first_valid_frame bytes_ok=%u width=%u height=%u row_bytes=%u sample_size=%u sample_fnv32=0x%08x timestamp_ok=%u time=%lld duration=%lld timescale=30000\n",
+        obs.firstFrameBytesOk.load(), obs.firstFrameWidth.load(),
+        obs.firstFrameHeight.load(), obs.firstFrameRowBytes.load(),
+        obs.firstFrameSampleCount.load(), obs.firstFrameSampleHash.load(),
+        obs.firstFrameTimeOk.load(), (long long)obs.firstFrameTime.load(),
+        (long long)obs.firstFrameDuration.load());
     fflush(stdout);
     ((Release)ivt[2])(input);
     ((Release)devV[2])(device);
