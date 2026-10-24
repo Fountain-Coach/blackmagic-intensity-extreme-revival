@@ -10,7 +10,9 @@
 // The probe STRICTLY checks the actual physical BMD display's selected source
 // rate before it arms input. Never changes source display mode or connector.
 // No IDeckLinkInput SetCallback/StartStreams, frame memory, PCI MMIO, or
-// firmware/driver operations. Old 10.4 frame-release crash stays contained.
+// firmware/driver operations. The original device does NOT support automatic
+// format detection; only the independent input signal-lock flag is relevant.
+// Old 10.4 frame-release crash stays contained.
 // Copyright (c) 2026 Fountain Coach contributors. MIT.
 #include <CoreFoundation/CoreFoundation.h>
 #include <CoreGraphics/CoreGraphics.h>
@@ -20,6 +22,7 @@
 #include <string.h>
 #include <sys/sysctl.h>
 #include <unistd.h>
+#include "decklink-signal-lock-contract.h"
 
 typedef void* (*Factory)(void);
 typedef int32_t (*Query)(void*,CFUUIDBytes,void**);
@@ -39,6 +42,9 @@ static const uint8_t kStatusIID[16]={
 static const uint8_t kConfigIID[16]={
     0x1e,0x69,0xfc,0xf6,0x42,0x03,0x49,0x36,
     0x80,0x76,0x2a,0x9f,0x4c,0xfd,0x50,0xcb};
+static const uint8_t kAttributesIID[16]={
+    0xab,0xc1,0x18,0x43,0xd9,0x66,0x44,0xcb,
+    0x96,0xe2,0xa1,0xcb,0x5d,0x31,0x35,0xc4};
 
 static void release_object(void* v) {
     if (v) ((Release)(*(void***)v)[2])(v);
@@ -154,6 +160,8 @@ int main(int argc,char** argv) {
         dlclose(lib);return 42;
     }
     void* input=nullptr;void* status=nullptr;void* config=nullptr;
+    void* attributes=nullptr;
+    bool inputFormatDetection=false;
     int result=0;bool enabled=false;
     rc=query(device,kConfigIID,&config);
     if(rc||!config){result=43;goto cleanup;}
@@ -164,6 +172,16 @@ int main(int argc,char** argv) {
                (unsigned)rc,(unsigned long long)connector);
         if(rc||(uint32_t)connector!=2u){result=44;goto cleanup;}
     }
+    // Query the original 10.4 device's actual format-detection capability.
+    // On the original Intensity Extreme this is supported=false, and SDK
+    // detected-mode status ('dvim') must NOT be an acceptance requirement.
+    rc=query(device,kAttributesIID,&attributes);
+    if(rc||!attributes){result=49;goto cleanup;}
+    rc=((GetFlag)(*(void***)attributes)[3])(
+        attributes,0x696e6664u,&inputFormatDetection); // 'infd'
+    printf("stage=capability input_format_detection rc=0x%08x supported=%d\n",
+           (unsigned)rc,rc==0?int(inputFormatDetection):-1);
+    if(rc){result=50;goto cleanup;}
     rc=query(device,kInputIID,&input);
     if(rc||!input){result=45;goto cleanup;}
     rc=query(device,kStatusIID,&status);
@@ -175,29 +193,38 @@ int main(int argc,char** argv) {
     if(rc){result=47;goto cleanup;}
     enabled=true;
     {
-        unsigned locked_samples=0,mode_samples=0;
+        unsigned locked_samples=0,lock_queries_succeeded=0;
         for(unsigned i=0;i<8;i++){
-            bool locked=false;int64_t detected=0;
+            bool locked=false;
             int32_t lock_rc=((GetFlag)(*(void***)status)[3])(
-                status,0x7669736cu,&locked);
-            int32_t mode_rc=((GetInt)(*(void***)status)[4])(
-                status,0x6476696du,&detected);
-            if(lock_rc==0&&locked) locked_samples++;
-            if(mode_rc==0 && (uint32_t)detected==mode) mode_samples++;
+                status,0x7669736cu,&locked); // 'visl' signal lock
+            if(lock_rc==0) {
+                lock_queries_succeeded++;
+                if(locked) locked_samples++;
+            }
             printf("stage=receiver sample=%u lock_rc=0x%08x"
-                   " locked=%s detected_rc=0x%08x detected_mode=0x%llx\n",
+                   " locked=%s detected_mode=SKIPPED_NOT_AN_ACCEPTANCE_SIGNAL\n",
                    i,(unsigned)lock_rc,
-                   lock_rc==0?(locked?"YES":"NO"):"UNKNOWN",
-                   (unsigned)mode_rc,(unsigned long long)detected);
+                   lock_rc==0?(locked?"YES":"NO"):"UNKNOWN");
             fflush(stdout);
             if(i<7) usleep(250000);
         }
+        const fc_decklink::SignalLockResult verdict=
+            fc_decklink::classify_signal_lock(
+                8,lock_queries_succeeded,locked_samples);
+        const char* label=verdict==fc_decklink::SignalLockResult::LockCandidate?
+            "LOCK_CANDIDATE":(
+             verdict==fc_decklink::SignalLockResult::NoLock?
+             "NO_LOCK":"STATUS_UNKNOWN");
         printf("stage=receiver result=%s locked_samples=%u"
-               " correct_detected_mode_samples=%u"
+               " successful_lock_queries=%u"
+               " input_format_detection_supported=%d"
+               " detected_mode_not_required=1"
                " real_frame_acceptance=NOT_TESTED\n",
-               (locked_samples>=2 && mode_samples>=2)?"LOCK_CANDIDATE":"NO_LOCK",
-               locked_samples,mode_samples);
-        if(locked_samples<2 || mode_samples<2) result=32;
+               label,locked_samples,lock_queries_succeeded,
+               inputFormatDetection?1:0);
+        if(verdict==fc_decklink::SignalLockResult::NoLock) result=32;
+        if(verdict==fc_decklink::SignalLockResult::UnknownStatus) result=51;
     }
 cleanup:
     if(enabled){
@@ -206,6 +233,7 @@ cleanup:
         if(drc) result=48;
     }
     release_object(status);
+    release_object(attributes);
     release_object(input);
     release_object(config);
     release_object(device);
