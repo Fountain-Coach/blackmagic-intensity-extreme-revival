@@ -230,7 +230,7 @@ static void* kCallbackVtable[5] = {
                           operation:NSCompositingOperationSourceOver fraction:1
                     respectFlipped:YES hints:nil];
     }
-    NSString *notice=self.notice?:@"NO SOURCE";
+    NSString *notice=self.notice ?: (self.frameImage ? @"" : @"NO SOURCE");
     if (notice.length) {
         NSDictionary *att=@{NSFontAttributeName:[NSFont systemFontOfSize:18
                                                                  weight:NSFontWeightMedium],
@@ -355,6 +355,8 @@ static NSButton *fcButton(NSRect frame,NSString *title, id target, SEL action) {
                                                  pullsDown:NO];
     [self.sourceChoice addItemsWithTitles:@[@"Blackmagic HDMI input",
                                              @"Virtual color bars · test"]];
+    self.sourceChoice.target=self;
+    self.sourceChoice.action=@selector(sourceChanged:);
     [root addSubview:self.sourceChoice];
     [root addSubview:fcLabel(NSMakeRect(822,481,260,23),
                             @"Capture format",13,muted,NO)];
@@ -448,6 +450,12 @@ static NSButton *fcButton(NSRect frame,NSString *title, id target, SEL action) {
     int32_t lrc=((FCGetFlag)vt[3])(status,0x7669736c,&locked);
     _hardwareLocked=lrc==0 && locked;
     ((FCRelease)vt[2])(status);
+}
+- (void)sourceChanged:(id)sender {
+    BOOL hardware=self.sourceChoice.indexOfSelectedItem==0;
+    self.formatChoice.enabled=hardware;
+    if (hardware && self.virtualActive)
+        [self setMessage:@"Optional hardware input selected; press Start to capture."];
 }
 - (void)openSoftwareLab:(id)sender {
     NSString *configured=[[NSUserDefaults standardUserDefaults]
@@ -815,6 +823,7 @@ static NSButton *fcButton(NSRect frame,NSString *title, id target, SEL action) {
     // Software-first. Starting Fountain Video must not enumerate real
     // capture hardware, require a powered camera or open a DeckLink client.
     [self.sourceChoice selectItemAtIndex:1];
+    [self sourceChanged:nil];
     self.deviceDetails.stringValue=@"Software simulation · hardware optional";
     [self startPressed:nil];
 }
