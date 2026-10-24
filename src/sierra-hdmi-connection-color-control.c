@@ -7,7 +7,7 @@
  * Separate restore watchdog + external SSH fallback required.
  *
  * --inspect: read only
- * --set422: request cyuv=0x10, original cyuv must be auto=0x10000000
+ * --set422: DISABLED: IOGraphics rewrites non-automatic requests to RGB
  * --restore444: restore original cyuv=auto and confirm original cmod=0x100
  *
  * Never calls IODisplayCommitParameters, SetDisplayMode or DeckLink streams.
@@ -81,6 +81,15 @@ int main(int argc,char** argv){
                    strcmp(argv[1],"--set422")&&
                    strcmp(argv[1],"--restore444"))){
         puts("usage: --inspect|--set422|--restore444");return 64;
+    }
+    // IOGraphics-515.3 IOFramebufferParameterHandler::doIntegerSet maps
+    // any non-auto cyuv request to RGB, as reproduced on installed 515.4.
+    // Permanently block the known-misleading experiment; preserve --restore444.
+    if(!strcmp(argv[1],"--set422")){
+        puts("stage=color_control result=BLOCKED_IOGRAPHICS_RGB_REWRITE"
+             " driver_color_422_unachievable_by_cyuv=1 writes=0"
+             " use=inspect_or_restore444");
+        return 65;
     }
     int write=strcmp(argv[1],"--inspect")!=0;
     int restore=strcmp(argv[1],"--restore444")==0;
