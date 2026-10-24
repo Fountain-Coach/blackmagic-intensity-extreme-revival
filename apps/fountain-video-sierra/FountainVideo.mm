@@ -512,9 +512,13 @@ static NSButton *fcButton(NSRect frame,NSString *title, id target, SEL action) {
 }
 - (void)sourceChanged:(id)sender {
     BOOL hardware=self.sourceChoice.indexOfSelectedItem==0;
-    self.formatChoice.enabled=hardware;
-    if (hardware && self.virtualActive)
-        [self setMessage:@"Blackmagic input suspended after Desktop Video 10.4 frame-release crash. Browser stream remains synthetic."];
+    if(hardware) {
+        [self.formatChoice selectItemAtIndex:7]; // Exact silver HDMI: 1080p30
+        // Capturing the host's primary desktop is private by default.
+        [self.scratchShareToggle setState:NSControlStateValueOff];
+        [self setMessage:@"Silver HDMI loopback · 1080p30 · private preview"];
+    }
+    self.formatChoice.enabled=NO; // Do not auto-scan other hardware fixtures
 }
 - (void)scratchShareChanged:(id)sender {
     if (self.scratchPublisher)
@@ -567,14 +571,10 @@ static NSButton *fcButton(NSRect frame,NSString *title, id target, SEL action) {
     }
 }
 - (void)startPressed:(id)sender {
-    // A real 1080p30 signal triggered a Desktop Video 10.4 destructor crash
-    // (CDeckLinkVideoInputFrame::Release) on this Sierra host. Preserve the
-    // working output/browser feed unless physical input has deliberately been
-    // re-authorized on an isolated, recovery-verified system.
-    if (self.sourceChoice.indexOfSelectedItem == 0 &&
-        ![[NSUserDefaults standardUserDefaults]
-                 boolForKey:@"FountainVideoAllowLegacyCapture"]) {
-        [self setMessage:@"Blackmagic physical input suspended: driver 10.4 crashed during real frame release. Existing virtual stream kept running."];
+    // Explicit fixed test rig. Reject any other monitor/mode before DeckLink I/O.
+    if(self.sourceChoice.indexOfSelectedItem==0 &&
+       !fcSilverFixedBMD1080p30()) {
+        [self setMessage:@"BMD HDMI 1920×1080@30 not verified. Capture not started."];
         return;
     }
     [self finishRecording];
@@ -625,13 +625,31 @@ static NSButton *fcButton(NSRect frame,NSString *title, id target, SEL action) {
     _callback->context=(__bridge void*)self;
     _pastCallbacks.push_back(_callback);
     void **inputTable=*(void***)_input;
-    rc=((FCSetCallback)inputTable[17])(_input,_callback);
-    if (rc) { [self setMessage:@"Cannot attach preview callback."];
-              [self stopCurrent:NO]; return; }
     rc=((FCEnableInput)inputTable[6])(_input,_selectedMode,kPixel2vuy,0);
-    if (rc) { [self setMessage:[NSString stringWithFormat:
-                              @"Cannot enable input (0x%08x).",(unsigned)rc]];
-              [self stopCurrent:NO]; return; }
+    if(rc) {
+        [self setMessage:[NSString stringWithFormat:
+                @"Cannot enable matched HDMI input (0x%08x).",(unsigned)rc]];
+        [self stopCurrent:NO]; return;
+    }
+    NSInteger stable=0;
+    for(NSInteger sample=0;sample<12 && stable<2;++sample) {
+        [self readSignalStatus];
+        stable=_hardwareLocked?stable+1:0;
+        if(stable<2)usleep(250000);
+    }
+    if(stable<2) {
+        ((FCNoArg)inputTable[7])(_input);
+        [self stopCurrent:NO];
+        [self setMessage:@"No HDMI signal lock. Capture NOT started."];
+        return;
+    }
+    rc=((FCSetCallback)inputTable[17])(_input,_callback);
+    if(rc) {
+        ((FCNoArg)inputTable[7])(_input);
+        [self stopCurrent:NO];
+        [self setMessage:@"Cannot attach captured-frame callback."];
+        return;
+    }
     self.captureActive=YES;
     rc=((FCNoArg)inputTable[13])(_input);
     if (rc) {
