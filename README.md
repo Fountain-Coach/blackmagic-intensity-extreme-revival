@@ -1,5 +1,7 @@
 # Blackmagic Intensity Extreme Revival
 
+**Current engineering decision — original hardware first, Ubuntu execution (24 October 2026).** Preserve the *actual* silver 2011 Mac mini / Thunderbolt / Comdis dock / Intensity Extreme (PCI **0xBDBD:0xA124**) as physical evidence. Build the **PCIe/firmware/register/DMA interface** on our existing **Ubuntu 24.04 Intel Mac mini**, using **strictly synthetic, evidence-limited register replay** while its Thunderbolt link is not connected. Native video/scratching simulation remains a downstream consumer test; it must never stand in for hardware. **No Sierra upgrade, recovery boot, driver swap or firmware change is required for this Ubuntu software lane.** The current Ubuntu host has two Thunderbolt 3 domains but **does not yet enumerate A124**. [Source-owned Ubuntu hardware-fidelity contract and witnessed acceptance](docs/a124-hardware-fidelity-ubuntu.md) · [Read-only Linux endpoint probe](hardware/ubuntu/a124_pci_port.py) · [44-case Ubuntu hardware interface acceptance](scripts/verify-a124-ubuntu-contract.sh).
+
 **Software repair is hardware sustainability.**
 
 A video-capture device does not stop being useful simply because its manufacturer stops supporting the software around it. This independent Fountain Coach project investigates whether a legacy **Blackmagic Intensity Extreme** can be brought back into service with documented diagnostics, reproducible reverse engineering, and eventually an openly implemented hardware interface.
@@ -14,7 +16,7 @@ Inspired by the practical spirit of a *Repair Café*: understand what is broken,
 
 **Independent-driver progress (23 October 2026):** our own [I/O Kit PCI inventory](src/intensity-pci-inventory.c) detected the actual Intensity Extreme on macOS Sierra, and a separate [read-only resource probe](src/intensity-pci-resources.c) reported two 1 MiB PCI memory-resource descriptors. A [passive Sierra kernel-driver skeleton](driver/sierra/passive/) builds from a clean Git checkout and passes offline linkage diagnostics, but has **not been loaded or matched to the device**; the original kernel driver remains active. This is driver-development progress, not captured video. [Sierra tests](tests/2026-10-23-independent-driver-sierra-offline.md) · [PCI resource evidence](tests/2026-10-23-pci-resource-layout.md).
 
-## Full software video laboratory — primary development path
+## Full software video laboratory — downstream media simulation
 
 **No physical source required.** The Nikon D5200 may remain switched off. Real HDMI inputs and outputs, Syphon, DeckLinkAPI and proprietary drivers are **not dependencies** of the video instrument's simulated feature contract.
 
