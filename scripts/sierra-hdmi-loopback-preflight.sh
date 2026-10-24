@@ -21,6 +21,8 @@ trap 'rm -rf "$temporary"' EXIT HUP INT TERM
 
 echo "stage=hdmi_preflight step=edid_and_output_mode"
 sh "$repo/scripts/sierra-hdmi-loopback-readonly.sh"
+echo "stage=hdmi_preflight step=edid_capabilities"
+perl "$repo/tools/sierra/hdmi-edid-capability-witness.pl"
 
 echo "stage=hdmi_preflight step=source_pixels"
 clang -std=c11 -Wall -Wextra -Werror \
@@ -59,4 +61,4 @@ fi
 
 echo "stage=capture_crash_evidence result=present vendor_frame_release=invalid"
 echo "stage=physical_capture result=NOT_ACCEPTED signal_lock=unverified real_frame=not_witnessed"
-echo "stage=hdmi_preflight result=pass edid=1 framebuffer=1 callback_mock=1 crash_evidence=1 vendor_capture_calls=0 driver_modifications=0"
+echo "stage=hdmi_preflight result=pass edid=1 edid_caps=1 framebuffer=1 callback_mock=1 crash_evidence=1 vendor_capture_calls=0 driver_modifications=0"
