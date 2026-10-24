@@ -107,9 +107,10 @@ static uint32_t pollStatus(void* status,unsigned seconds) {
     return rc==0?(uint32_t)mode:0;
 }
 int main(int argc,char** argv) {
-    const bool run=argc==2&&!strcmp(argv[1],"--program-hdmi2-60s");
+    const bool run=argc==2&&(!strcmp(argv[1],"--program-hdmi2-60s") || !strcmp(argv[1],"--program-hdmi2-300s")); 
+    const unsigned duration=argc==2&&!strcmp(argv[1],"--program-hdmi2-300s")?300u:60u;
     if(!run) {
-        fprintf(stderr,"usage: --program-hdmi2-60s\n");
+        fprintf(stderr,"usage: --program-hdmi2-60s | --program-hdmi2-300s\n");
         return 64;
     }
     if(!originalSilverAndDesktop()) {
@@ -159,7 +160,7 @@ int main(int argc,char** argv) {
         unsigned lastSecond=0;
         while(!interrupted.load()) {
             const uint64_t elapsedNs=ns()-start;
-            if(elapsedNs>=60000000000ull)break;
+            if(elapsedNs>=(uint64_t)duration*1000000000ull)break;
             // A deterministic 100px-wide moving luminance marker at the
             // bottom proves active updates without saving private content.
             const int y=H-48;
@@ -212,8 +213,8 @@ cleanup:
            "api_errors=%u consecutive_matching_mode_seconds=%u "
            "output_disabled_after_test=1 monitor_optical_pixels_unmeasured=1 "
            "hdmi_in_untouched=1\n",
-           accepted&&frames>=300&&matchingSeconds>=45?"API_STABLE":"FAIL",
+           accepted&&frames>=duration*8&&matchingSeconds>=duration-2?"API_STABLE":"FAIL",
            frames,errors,matchingSeconds);
     fflush(stdout);
-    return accepted&&frames>=300&&matchingSeconds>=45?0:67;
+    return accepted&&frames>=duration*8&&matchingSeconds>=duration-2?0:67;
 }
