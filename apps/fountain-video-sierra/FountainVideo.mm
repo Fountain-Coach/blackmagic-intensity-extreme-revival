@@ -33,6 +33,7 @@ typedef int32_t (*FCNoArg)(void*);
 typedef int32_t (*FCSetCallback)(void*, void*);
 typedef int32_t (*FCGetFlag)(void*, uint32_t, bool*);
 typedef int32_t (*FCGetInt)(void*, uint32_t, int64_t*);
+typedef int32_t (*FCSetInt)(void*, uint32_t, int64_t);
 typedef uint32_t (*FCFrameFlags)(void*);
 typedef long (*FCFrameDimension)(void*);
 typedef int32_t (*FCFrameBytes)(void*, void**);
@@ -57,6 +58,14 @@ static NSString *fcLocalHDMIMailboxToken() {
 }
 static const unsigned char kInputIID[16] =
     {0xaf,0x22,0x76,0x2b,0xdf,0xac,0x48,0x46,0xaa,0x79,0xfa,0x88,0x83,0x56,0x09,0x95};
+static const unsigned char kOriginalConfigurationIID[16] =
+    {0x1e,0x69,0xfc,0xf6,0x42,0x03,0x49,0x36,
+     0x80,0x76,0x2a,0x9f,0x4c,0xfd,0x50,0xcb};
+static const uint32_t kVideoOutputIdleOperation = 0x766f696f; // voio
+static const uint32_t kVideoOutputDefaultMode = 0x64766f6d; // dvom
+static const uint32_t kIdleBlackFrame = 0x626c6163; // blac
+static const uint32_t kDefault1080i50 = 0x48693530; // Hi50
+static const uint32_t kMatched1080p30 = 0x48703330; // Hp30
 static const unsigned char kStatusIID[16] =
     {0x5f,0x55,0x82,0x00,0x40,0x28,0x49,0xbc,0xbe,0xac,0xdb,0x3f,0xa4,0xa9,0x6e,0x46};
 static const unsigned char kCallbackIID[16] =
@@ -366,6 +375,7 @@ static void* kCallbackVtable[5] = {
     std::vector<FCCallback*> _pastCallbacks;
     uint32_t _selectedMode;
     BOOL _hardwareLocked;
+    void *_heldOutputConfiguration;
 }
 static NSTextField *fcLabel(NSRect frame, NSString *title, CGFloat font,
                             NSColor *color, BOOL bold) {
@@ -491,6 +501,76 @@ static NSButton *fcButton(NSRect frame,NSString *title, id target, SEL action) {
     [self.window makeKeyAndOrderFront:nil];
     [NSApp activateIgnoringOtherApps:YES];
 }
+// Reversible user-space correction for old Desktop Video 10.4:
+//
+// The original Intensity Extreme defaults to 1080i50 ('Hi50') while
+// the *only final source* is silver HDMI 1080p30. That mismatch causes the
+// external reference monitor to reacquire sync between playback sessions.
+// We hold a config reference so output stays 1080p30 for this GUI session.
+//
+// CRITICAL: idle operation remains BLACK ('blac'), never LastFrame: this
+// prevents displaying a previously captured private desktop after playback.
+// There is NO WriteConfigurationToPreferences, sudo, daemon or KEXT change.
+// Releasing this COM config automatically restores the driver default.
+- (void)holdOriginalOutputIdleStandard {
+    if(!_device || _heldOutputConfiguration || !fcSilverFixedBMD1080p30())return;
+    void* config=nullptr;
+    const int32_t queryRC=((FCQuery)(*(void***)_device)[0])(
+        _device,fcUUID(kOriginalConfigurationIID),&config);
+    if(queryRC || !config) {
+        NSLog(@"FountainVideo idle output config unavailable rc=0x%08x",
+              (unsigned)queryRC);
+        return;
+    }
+    void** vt=*(void***)config;
+    int64_t idle=0,defaultMode=0;
+    const int32_t idleRC=((FCGetInt)vt[6])(config,kVideoOutputIdleOperation,&idle);
+    const int32_t modeRC=((FCGetInt)vt[6])(config,kVideoOutputDefaultMode,&defaultMode);
+    if(idleRC || modeRC || (uint32_t)idle!=kIdleBlackFrame) {
+        NSLog(@"FountainVideo idle video must remain black; no changes");
+        ((FCRelease)vt[2])(config);
+        return;
+    }
+    if((uint32_t)defaultMode==kMatched1080p30) {
+        self.deviceDetails.stringValue=@"Intensity Extreme · HDMI output 1080p30 · idle black";
+        ((FCRelease)vt[2])(config);
+        return;
+    }
+    if((uint32_t)defaultMode!=kDefault1080i50) {
+        NSLog(@"FountainVideo unexpected output default 0x%08x; no changes",
+              (unsigned)(uint32_t)defaultMode);
+        ((FCRelease)vt[2])(config);
+        return;
+    }
+    const int32_t setRC=((FCSetInt)vt[5])(
+        config,kVideoOutputDefaultMode,(int64_t)kMatched1080p30);
+    int64_t verifiedMode=0,verifiedIdle=0;
+    const int32_t mr=((FCGetInt)vt[6])(config,kVideoOutputDefaultMode,&verifiedMode);
+    const int32_t ir=((FCGetInt)vt[6])(config,kVideoOutputIdleOperation,&verifiedIdle);
+    if(setRC || mr || ir || (uint32_t)verifiedMode!=kMatched1080p30 ||
+       (uint32_t)verifiedIdle!=kIdleBlackFrame) {
+        ((FCSetInt)vt[5])(config,kVideoOutputDefaultMode,(int64_t)kDefault1080i50);
+        NSLog(@"FountainVideo output standard session hold refused rc=0x%08x",
+              (unsigned)setRC);
+        ((FCRelease)vt[2])(config);
+        return;
+    }
+    _heldOutputConfiguration=config;  // keep until closeDevice / app termination
+    self.deviceDetails.stringValue=@"Intensity Extreme · HDMI output 1080p30 · idle black";
+    NSLog(@"FountainVideo output_idle_default=Hp30 idle_picture=black "
+          "scoped_to_native_application=1 persistent_pref_write=0");
+}
+- (BOOL)verifyHeldOriginalOutputStandard {
+    if(!_heldOutputConfiguration)return NO;
+    void** vt=*(void***)_heldOutputConfiguration;
+    int64_t mode=0,idle=0;
+    int32_t m=((FCGetInt)vt[6])(_heldOutputConfiguration,
+                               kVideoOutputDefaultMode,&mode);
+    int32_t i=((FCGetInt)vt[6])(_heldOutputConfiguration,
+                               kVideoOutputIdleOperation,&idle);
+    return m==0 && i==0 && (uint32_t)mode==kMatched1080p30 &&
+           (uint32_t)idle==kIdleBlackFrame;
+}
 - (BOOL)openDevice {
     if (_device) return YES;
     _library=dlopen("/Library/Frameworks/DeckLinkAPI.framework/DeckLinkAPI",
@@ -508,10 +588,17 @@ static NSButton *fcButton(NSRect frame,NSString *title, id target, SEL action) {
     ((FCRelease)vt[2])(iterator);
     if (rc || !_device) { [self closeDevice]; return NO; }
     self.deviceDetails.stringValue=@"Intensity Extreme · vendor driver 10.4";
+    [self holdOriginalOutputIdleStandard];
     return YES;
 }
 - (void)closeDevice {
     if (_input) return;  // stop capture first
+    if (_heldOutputConfiguration) {
+        void** cvt=*(void***)_heldOutputConfiguration;
+        ((FCRelease)cvt[2])(_heldOutputConfiguration);
+        _heldOutputConfiguration=NULL;
+        NSLog(@"FountainVideo output idle hold released; vendor defaults restored");
+    }
     if (_device) {
         void **vt=*(void***)_device;
         ((FCRelease)vt[2])(_device); _device=NULL;
@@ -1034,6 +1121,46 @@ static NSButton *fcButton(NSRect frame,NSString *title, id target, SEL action) {
 }
 @end
 
+// Verify actual Sierra vendor 10.4 holds the exact matched output standard
+// while the *native application owns the device*. Never enable video playback,
+// open HDMI input or publish the private desktop in this regression test.
+static int runOriginalOutputModeHoldTest(void) {
+    @autoreleasepool {
+        if(!fcSilverFixedBMD1080p30()) {
+            puts("stage=native_output_mode_hold result=wrong_fixture");
+            return 77;
+        }
+        NSApplication *app=[NSApplication sharedApplication];
+        [app setActivationPolicy:NSApplicationActivationPolicyAccessory];
+        FountainController *controller=[FountainController new];
+        [controller buildWindow];
+        if(![controller openDevice]) {
+            puts("stage=native_output_mode_hold result=device_unavailable");
+            exit(78);
+        }
+        BOOL alive=[controller verifyHeldOriginalOutputStandard];
+        NSDate *until=[NSDate dateWithTimeIntervalSinceNow:3.0];
+        while([until timeIntervalSinceNow]>0) {
+            [[NSRunLoop currentRunLoop]
+                runUntilDate:[NSDate dateWithTimeIntervalSinceNow:.10]];
+        }
+        alive=alive&&[controller verifyHeldOriginalOutputStandard];
+        [controller stopCurrent:NO];
+        [controller closeDevice];
+        controller.window.delegate=nil;
+        [controller.window orderOut:nil];
+        [controller.window close];
+        controller.window=nil;
+        app.delegate=nil;
+        printf("stage=native_output_mode_hold result=%s "
+               "output_mode=1080p30 idle_frame=black "
+               "idle_hold_released=1 preference_write=0 "
+               "capture_started=0 output_playback_started=0 "
+               "monitor_optical_witness=unavailable\n",alive?"PASS":"FAIL");
+        fflush(stdout);
+        exit(alive?0:79);
+    }
+}
 static int runScratchCodecTest(void) {
     @autoreleasepool {
         NSData *rgba=virtualBarsRGBA(1280,720,9);
@@ -1367,6 +1494,8 @@ int main(int argc,char **argv) {
         return runWindowSelfTest();
     if (argc==2 && !strcmp(argv[1],"--self-test-fixed-silver-hdmi"))
         return runFixedSilverHDMIAppTest();
+    if (argc==2 && !strcmp(argv[1],"--self-test-original-hdmi-output-idle"))
+        return runOriginalOutputModeHoldTest();
     if (argc==2 && !strcmp(argv[1],"--self-test-fixed-silver-hdmi-live-docker"))
         return runFixedSilverDockerLiveTest(NO);
     if (argc==2 && !strcmp(argv[1],"--self-test-fixed-silver-hdmi-live-local-docker"))
