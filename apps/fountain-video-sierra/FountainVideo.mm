@@ -569,6 +569,7 @@ static NSButton *fcButton(NSRect frame,NSString *title, id target, SEL action) {
         } else {
             [self stopCurrent:NO];
             self.autoScanning=NO;
+            [self finishRecording];
             self.stage.notice=@"NO HDMI INPUT SIGNAL";
             [self setMessage:@"No signal detected in four common capture formats."];
             [self.stage setNeedsDisplay:YES];
@@ -835,6 +836,34 @@ static int runDeviceProbe(void) {
         return 0;
     }
 }
+static int runAutoScanSelfTest(void) {
+    @autoreleasepool {
+        NSApplication *app=[NSApplication sharedApplication];
+        [app setActivationPolicy:NSApplicationActivationPolicyAccessory];
+        FountainController *controller=[FountainController new];
+        [controller buildWindow];
+        [controller.sourceChoice selectItemAtIndex:0];
+        [controller.formatChoice selectItemAtIndex:0];
+        [controller startPressed:nil];
+        NSDate *deadline=[NSDate dateWithTimeIntervalSinceNow:16.0];
+        while (controller.autoScanning && [deadline timeIntervalSinceNow]>0) {
+            [[NSRunLoop currentRunLoop]
+                runUntilDate:[NSDate dateWithTimeIntervalSinceNow:.25]];
+        }
+        BOOL ended=!controller.autoScanning && !controller.captureActive;
+        NSString *status=controller.status.stringValue;
+        BOOL noSource=[status containsString:@"No signal detected"];
+        printf("stage=auto_hdmi_scan result=%s finished=%u inactive=%u"
+               " no_source=%u\n",
+               ended&&noSource?"pass":"fail",
+               (unsigned)(!controller.autoScanning),
+               (unsigned)(!controller.captureActive),(unsigned)noSource);
+        [controller stopCurrent:NO];
+        [controller closeDevice];
+        [controller.window close];
+        return ended&&noSource ? 0 : 44;
+    }
+}
 static int runMovieSelfTest(void) {
     @autoreleasepool {
         FountainController *controller=[FountainController new];
@@ -878,12 +907,14 @@ static int runMovieSelfTest(void) {
     }
 }
 int main(int argc,char **argv) {
+    if (argc==2 && !strcmp(argv[1],"--self-test-autoscan"))
+        return runAutoScanSelfTest();
     if (argc==2 && !strcmp(argv[1],"--self-test-movie"))
         return runMovieSelfTest();
     if (argc==2 && !strcmp(argv[1],"--self-test")) return runSelfTest();
     if (argc==2 && !strcmp(argv[1],"--probe")) return runDeviceProbe();
     if (argc!=1) {
-        fprintf(stderr,"usage: FountainVideo [--self-test|--self-test-movie|--probe]\n");
+        fprintf(stderr,"usage: FountainVideo [--self-test|--self-test-movie|--self-test-autoscan|--probe]\n");
         return 64;
     }
     @autoreleasepool {
