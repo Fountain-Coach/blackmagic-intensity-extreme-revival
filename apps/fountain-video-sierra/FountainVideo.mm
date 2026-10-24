@@ -1136,13 +1136,15 @@ static int runFixedSilverHDMIAppTest(void) {
 // Explicit, bounded live-transport acceptance: real silver HDMI -> native AppKit
 // -> authenticated private SSH loopback -> separate Ubuntu Linux Docker scratch.
 // No public LAN listener. Never run this test without operator-owned fixture.
-static int runFixedSilverDockerLiveTest(void) {
+static int runFixedSilverDockerLiveTest(BOOL localSilverGuest) {
     @autoreleasepool {
         if(!fcSilverFixedBMD1080p30()) {
             puts("stage=native_docker_live result=wrong_physical_fixture");
             return 70;
         }
-        const char* rawPath=getenv("FOUNTAIN_TEST_DOCKER_STAGING_SECRET");
+        const char* rawPath=getenv(localSilverGuest ?
+            "FOUNTAIN_TEST_HDMI_MAILBOX_LOCAL_TOKEN" :
+            "FOUNTAIN_TEST_DOCKER_STAGING_SECRET");
         if(!rawPath || !*rawPath) {
             puts("stage=native_docker_live result=missing_private_secret");
             return 71;
@@ -1163,8 +1165,9 @@ static int runFixedSilverDockerLiveTest(void) {
             return 73;
         }
         // Only the loopback port provisioned by our preflight SSH tunnels.
-        NSURL* endpoint=[NSURL URLWithString:
-                  @"http://127.0.0.1:8473/api/scratch/ingest"];
+        NSURL* endpoint=[NSURL URLWithString:localSilverGuest ?
+            @"http://127.0.0.1:8483/api/scratch/ingest" :
+            @"http://127.0.0.1:8473/api/scratch/ingest"];
         FCScratchPublisher* publisher=[[FCScratchPublisher alloc]
                                  initWithEndpoint:endpoint token:token];
         if(!publisher) return 74;
@@ -1214,12 +1217,13 @@ static int runFixedSilverDockerLiveTest(void) {
             controller.scratchShareToggle.state==NSControlStateValueOff &&
             !controller.captureActive;
         printf("stage=native_docker_live result=%s "
-               "physical_rgba=%u authenticated_post_delivered=%lu "
+               "physical_rgba=%u local_mailbox_committed=%lu "
                "post_failed=%lu main_desktop_share_after_test=OFF "
-               "destination=localhost_ssh_to_ubuntu_docker "
-               "clean_capture_release=1\n",
+               "destination=%s "
+               "clean_capture_release=1 docker_receipt_independently_required=1\n",
                accepted?"pass":"fail",(unsigned)nativeImage,
-               (unsigned long)delivered,(unsigned long)failed);
+               (unsigned long)delivered,(unsigned long)failed,
+               localSilverGuest?"silver_virtio_block":"ubuntu_ssh_tunnel");
         fflush(stdout);
         exit(accepted?0:76);
     }
@@ -1307,7 +1311,9 @@ int main(int argc,char **argv) {
     if (argc==2 && !strcmp(argv[1],"--self-test-fixed-silver-hdmi"))
         return runFixedSilverHDMIAppTest();
     if (argc==2 && !strcmp(argv[1],"--self-test-fixed-silver-hdmi-live-docker"))
-        return runFixedSilverDockerLiveTest();
+        return runFixedSilverDockerLiveTest(NO);
+    if (argc==2 && !strcmp(argv[1],"--self-test-fixed-silver-hdmi-live-local-docker"))
+        return runFixedSilverDockerLiveTest(YES);
     if (argc==2 && !strcmp(argv[1],"--self-test-autoscan"))
         return runAutoScanSelfTest();
     if (argc==2 && !strcmp(argv[1],"--self-test-movie"))
