@@ -56,7 +56,8 @@ static bool rig() {
 int main(int argc,char**argv) {
     const bool apply=argc==2 && !strcmp(argv[1],"--set-default-hdmi-1080p30");
     const bool revert=argc==2 && !strcmp(argv[1],"--restore-default-hdmi-1080i50");
-    if(!apply&&!revert)return 64;
+    const bool volatileReset=argc==2 && !strcmp(argv[1],"--restore-volatile-original-hi50");
+    if(!apply&&!revert&&!volatileReset)return 64;
     if(!rig()){
         puts("stage=hdmi_output_config result=wrong_final_silver_fixture");
         return 65;
@@ -105,6 +106,24 @@ int main(int argc,char**argv) {
         printf("stage=hdmi_output_config result=unverified_changes "
                "rollback_rc=0x%08x preferences_written=0\n",(unsigned)undo);
         release(cfg);release(dev);dlclose(lib);return 72;
+    }
+    if(volatileReset) {
+        release(cfg);cfg=nullptr;
+        rc=((QI)(*(void***)dev)[0])(dev,iid,&cfg);
+        if(rc || !cfg) {
+            release(dev);dlclose(lib);
+            return 76;
+        }
+        int64_t value=0,idleValue=0;
+        int32_t mc=((GetInt)(*(void***)cfg)[6])(cfg,MODE_KEY,&value);
+        int32_t ic=((GetInt)(*(void***)cfg)[6])(cfg,IDLE_KEY,&idleValue);
+        bool verified=mc==0 && ic==0 && (uint32_t)value==HI50 &&
+                      (uint32_t)idleValue==BLACK;
+        printf("stage=volatile_rollback original_hi50_restored=%d "
+               "idle_black_unchanged=1 prefs_write=0 source_display_unchanged=1\n",
+               verified?1:0);
+        release(cfg);release(dev);dlclose(lib);
+        return verified?0:77;
     }
     rc=save(cfg);
     printf("stage=hdmi_output_config_persist rc=0x%08x "
