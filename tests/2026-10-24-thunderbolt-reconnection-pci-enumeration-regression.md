@@ -64,3 +64,15 @@ This was a live hardware fail-closed acceptance result, **not** a simulator or r
 6. Retain historical **real** physical 2-frame capture and the **17-frame** same-silver Linux Docker ingest as past accepted evidence. The current state is **not** accepted as recovered.
 
 **Verdict:** new upstream device-enumeration blocker after physical Thunderbolt reconnection, stronger than the prior HDMI input `NO_LOCK`. PR #10 remains DRAFT.
+
+## Downstream Thunderbolt hypothesis (external model documentation; no physical witness yet)
+
+The original **Blackmagic Intensity Extreme** is a Thunderbolt bus-powered endpoint; it does not use its own external power adapter. The **i-tec / Comdis THUNDERDOCK2** provides two Thunderbolt 2 ports (upstream to the Mac, other for downstream Thunderbolt devices). Sources:
+
+- https://www.tvtechnology.com/be-blogs/2836 — original Intensity Extreme launch announcement, bus-powered.
+- https://www.multitronic.fi/en/products/2121608 — model THUNDERDOCK2, two Thunderbolt 2 ports.
+- https://www.manualslib.de/manual/758117/I-Tec-Thunderbolt-2.html — dock instruction manual.
+
+The current Sierra Thunderbolt inventory says for the **THUNDERDOCK2 downstream Port**: `Status: No device connected`. Given the fixed single-Thunderbolt-port 2011 silver Mac, a downstream bus-powered Intensity Extreme would have to enumerate beyond the dock. Its absence together with the missing PCI `BDBD:A124` is consistent with loss of the downstream Thunderbolt link or bus power, **not proof of a failed HDMI decoder**. It remains unverified which exact Thunderbolt cable the operator unplugged and reconnected.
+
+**Next most discriminating physical observation:** without substituting any HDMI source or moving the existing HDMI cables, verify the **dock-to-Intensity Thunderbolt cable is fully seated at both ends**, the original Intensity's own power/LED state (if visible), and that the dock has its specified AC adapter connection. Check inventory again after any deliberate physical inspection. Do not remote-reboot the silver, change driver/kernel, or reset firmware to compensate for an absent downstream Thunderbolt endpoint. If physical handling is necessary, avoid hot-unplugging a dock carrying active storage; first ensure safe shutdown of dependent workflows.
