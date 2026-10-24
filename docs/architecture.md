@@ -45,7 +45,7 @@ Original older application flow — Black Syphon → Syphon → Vuo → NDI — 
 
 ## Verification boundary
 
-- Virtual tests: Python 3.10+ standard library; current local suite **68 tests passed** on Ubuntu with the camera switched off.
+- Virtual tests: Python 3.10+ standard library; current local suite **70 tests passed** on Ubuntu with the camera switched off.
 - Native macOS GUI: Fountain Video on Sierra defaults to a generated, visibly labeled synthetic source, with a shortcut to the full lab; selecting real hardware is explicit.
 - Real capture: **not accepted**. No actual HDMI image or live source frame has yet been obtained from the Nikon/Intensity Extreme.
 - Real output sink, actual interlacing, analog electrical conversion, kernel-driver ownership and real Syphon/NDI publishing are not simulated and cannot be claimed as achieved based on virtual tests.
