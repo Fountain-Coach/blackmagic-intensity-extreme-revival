@@ -21,13 +21,26 @@ Our read-only [model-dispatch inspector](../scripts/inspect_private_model_dispat
 
 **Interpretation:** the original vendor input-format detector appears to examine a 32-bit status word at **BAR0 + `0x40`**. This is now a strongly corroborated, *model-specific, static* register-offset candidate. It does not certify that a read has no side effect, that a valid physical HDMI signal is present, or that the same binary behavior has been witnessed under runtime instrumentation.
 
+## Independent firmware-version gate reconstruction
+
+Private decompilation of `HDExtreme::InitialiseHardware` (image-relative `0x2ca4c`; locally retained REA/Ghidra evidence `2026-10-24-hdextreme-initialise-hardware.json`) shows that it checks private guards, may relink the PCIe bridge, and obtains a model-specific firmware-version value before setting its internal `this+0x28a` readiness byte.
+
+For model `0x36`, its version comparison reads a byte from a model-code-indexed table. The value in the exact checked binary is **`0x0B` (decimal 11)**. The routine can skip this version comparison when an internal bypass-state byte (`this+0x28c`) is set, so a simple abstract equality test must not be described as its entire readiness contract.
+
+The version query is itself resolved in two independent steps:
+
+- The private `HDExtreme` vtable offset **`0x340`** targets inherited `HDProPCIExpress::getFirmwareVersion` (image-relative `0x29bc2`). Our hash-pinned [symbol/vtable inspector](../scripts/inspect_private_status_dispatch.py) reproduces that method selection and reads the expected `0x0B` table value from the original binary without emitting proprietary executable bytes.
+- The privately decompiled method calls `BitTestEndian` (vtable offset `0x798`) with mask **`0xFF`** on its internal `this+0x3e8` register pointer. HDExtreme initialization assigned that pointer from BAR0 mapping base plus **`0x224`**. The reconstructed result is therefore the low-byte portion of a candidate firmware-version register at **BAR0 + `0x224`**.
+
+Upon accepting the version/readiness gate, the vendor initializer performs additional PCI and MMIO writes, waits, calibration and other initialization operations. **Our software has performed none of these hardware operations**, and we have not measured whether the physical card currently reports version 11. An actual version mismatch is a hypothesis, not a diagnosis.
+
 ## Source-owned classifier and bounded tests
 
 The pure [input-status classifier](../src/intensity-input-status.c) models the gates visible in the base function without touching I/O Kit, DeckLinkAPI or BAR memory. It refuses to infer modes when the extended status requires the original mode lookup table; it never claims an actual signal lock.
 
 Eleven synthetic C tests in [`tests/test-intensity-input-status.c`](../tests/test-intensity-input-status.c) passed with strict compiler warnings on **both the Sierra Mac mini and Ubuntu**. These exercise gated paths, unreadable status, no-source flag, simple mode indices, extended timing families, and reserved status. Tests only establish fidelity to the documented interpretation, not hardware functionality.
 
-The private status vtable verifier and existing model-dispatch parser have **ten passing synthetic Python tests together** on Ubuntu. They also passed a real hash-pinned check against the authorized private binary; vendor executable bytes are not included in Git.
+The private status vtable verifier and existing model-dispatch parser have **twelve passing synthetic Python tests together** on Ubuntu. They also passed a real hash-pinned check against the authorized private binary; vendor executable bytes are not included in Git.
 
 ## Remaining preconditions for a live register experiment
 
@@ -36,4 +49,4 @@ The private status vtable verifier and existing model-dispatch parser have **ten
 3. Design a bounded, recoverable read-only experiment under exclusive PCI device ownership, including loss-of-signal and bus-error handling. Do not let two drivers compete for the same PCI device. Do not flash firmware, write unknown BAR registers, or enable DMA on the present boot.
 4. Interpret a real status word against the observed firmware readiness and physical source state; only then expand from the pure classifier to hardware capture.
 
-**Explicitly not accomplished:** firmware-ready runtime observation, live BAR0+`0x40` access, independent PCI driver load, DMA, HDMI lock, or a physical frame capture.
+**Explicitly not accomplished:** firmware-ready runtime observation, live BAR0+`0x224` or BAR0+`0x40` access, independent PCI driver load, DMA, HDMI lock, or a physical frame capture.
