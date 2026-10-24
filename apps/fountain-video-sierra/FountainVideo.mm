@@ -129,6 +129,11 @@ static NSData *virtualBarsRGBA(NSUInteger width, NSUInteger height, uint32_t seq
         {235,235,235}, {235,235,16}, {16,235,235}, {16,235,16},
         {235,16,235}, {235,16,16}, {16,16,235}, {16,16,16}
     };
+    const NSUInteger side=MIN(MIN(width,height),
+                              MAX((NSUInteger)16,MIN(width,height)/9));
+    const NSUInteger travel=width>side ? width-side : 0;
+    const NSUInteger pos=travel ? (sequence*23u)%(travel+1) : 0;
+    const NSUInteger top=height/2-side/2;
     for (NSUInteger y=0; y<height; ++y) {
         for (NSUInteger x=0; x<width; ++x) {
             NSUInteger idx = (x * 8) / width;
@@ -137,9 +142,6 @@ static NSData *virtualBarsRGBA(NSUInteger width, NSUInteger height, uint32_t seq
             pixel[2]=bars[idx][2]; pixel[3]=255;
             // Moving high-contrast target: browser jogging becomes visually
             // measurable, unlike an almost unchanging color-bar picture.
-            const NSUInteger side=MAX(16,MIN(width,height)/9);
-            const NSUInteger pos=(sequence*23u) % (width-side);
-            const NSUInteger top=height/2-side/2;
             if (x>=pos && x<pos+side && y>=top && y<top+side) {
                 const NSUInteger dx=x-pos,dy=y-top;
                 const BOOL edge=dx<5 || dy<5 || dx>=side-5 || dy>=side-5;
