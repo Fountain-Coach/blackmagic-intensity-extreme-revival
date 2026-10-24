@@ -96,8 +96,8 @@ int main(int argc,char**argv) {
     const uint32_t target=strcmp(argv[1],"--set422")==0?kYCbCr422:kYCbCr444;
     char model[64]={0},release[64]={0};
     size_t ml=sizeof(model),rl=sizeof(release);
-    if(sysctlbyname("hw.model",model,&ml,NULL) ||
-       sysctlbyname("kern.osrelease",release,&rl,NULL) ||
+    if(sysctlbyname("hw.model",model,&ml,NULL,0) ||
+       sysctlbyname("kern.osrelease",release,&rl,NULL,0) ||
        strcmp(model,"Macmini5,3") || strncmp(release,"16.",3)){
         puts("stage=guard result=WRONG_HOST");return 20;
     }
