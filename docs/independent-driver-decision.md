@@ -1,5 +1,7 @@
 # Decision: independent Intensity Extreme driver
 
+**2026-10-24 hardware-owner correction:** The route of record is **original Blackmagic Intensity Extreme PCIe/Thunderbolt interface on current Ubuntu**, with the silver 2011 Mac mini as an independently witnessed physical reference. Ubuntu presently has Thunderbolt host controllers, but the actual A124 card remains on silver; the Ubuntu register interface is **injected read-only replay**, not a full emulated PCI endpoint and not physical capture. Earlier Sierra driver-upgrade, reinstall and recovery investigation is an OPTIONAL side branch, not a prerequisite for Ubuntu hardware engineering. Media/browser simulation is a **downstream consumer** of the eventual source-owned hardware device, not its substitute. [Actual topology, source-owned Ubuntu hardware contract, physical acceptance](a124-hardware-fidelity-ubuntu.md).
+
 Date: 2026-10-23. Status: design approved; an independent hardware driver is **not yet functional**.
 
 ## Why
