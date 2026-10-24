@@ -2,10 +2,12 @@
 import importlib.util
 from pathlib import Path
 import struct
+import sys
 import unittest
 
 SOURCE = (Path(__file__).resolve().parents[1] / "scripts" /
           "inspect_private_status_dispatch.py")
+sys.path.insert(0, str(SOURCE.parent))
 spec = importlib.util.spec_from_file_location("inspect_private_status_dispatch", SOURCE)
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
