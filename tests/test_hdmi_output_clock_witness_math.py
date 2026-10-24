@@ -2,12 +2,17 @@
 # Portable, synthetic timing math tests. No hardware access.
 from __future__ import print_function
 import os
-import runpy
+import sys
 import unittest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WITNESS = os.path.join(ROOT, "tools", "sierra", "hdmi-output-clock-witness.py")
-namespace = runpy.run_path(WITNESS, run_name="hdmi_output_clock_math_tests")
+namespace = {"__name__": "hdmi_output_clock_math_tests"}
+if sys.version_info[0] < 3:
+    execfile(WITNESS, namespace)
+else:
+    with open(WITNESS, "rb") as f:
+        exec(compile(f.read(), WITNESS, "exec"), namespace)
 ratio_hz = namespace["ratio_hz"]
 relative_percent = namespace["relative_percent"]
 
