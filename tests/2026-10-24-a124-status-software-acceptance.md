@@ -71,4 +71,16 @@ A first test run failed because the newly added test did not set up its sibling 
 
 A final 24 October read-only machine check confirmed both original Blackmagic 10.4 kernel modules remained loaded, our independent driver was not loaded, and the crash-prone CoreMediaIO plug-in remained isolated. The firmware register value was not queried live.
 
+## A124 firmware gate follow-up
+
+Private static evidence resolves the HDExtreme firmware version slot (`0x340`) to `HDProPCIExpress::getFirmwareVersion`, whose masked read is derived from candidate BAR0+`0x224`. The expected model byte in the exact authenticated binary is `0x0B`, as now reproduced by the hash-pinned [private-symbol inspector](../scripts/inspect_private_status_dispatch.py). Actual firmware contents were **not** measured from the physical card.
+
+The independently authored, pure [firmware gate](../src/intensity-firmware-gate.c) covers guards, accepted/mismatched versions and an explicitly skipped version comparison. It was compiled with `-std=c11 -Wall -Wextra -Werror -pedantic` using **Clang on the Sierra Mac mini** and **cc on Ubuntu**; each run returned:
+
+```text
+stage=firmware_gate result=pass tests=6 hardware_access=0
+```
+
+The complete new C test coverage is therefore **17 synthetic cases** (11 input-status + 6 firmware-gate); the two Python private-inspector suites cover another **12 synthetic cases**. These do **not** constitute physical readiness or HDMI capture.
+
 **All results are software/ABI evidence**; no code accessed a PCI device BAR or initiated video DMA. The original Blackmagic vendor drivers continue to own the hardware. See [A124 status-register evidence](../docs/a124-input-status-call-chain-2026-10-24.md).
