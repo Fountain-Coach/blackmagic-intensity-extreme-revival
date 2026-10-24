@@ -45,7 +45,7 @@ class FrameMailboxTests(unittest.TestCase):
     def test_ring_wrap_and_writer_restart_monotonic(self):
         for i in range(m.SLOT_COUNT+3):
             seq=self.writer.submit(1000000+i*33000000,320,180,
-                                   JPEG+bytes(bytearray([i])), "physical-test")
+                                   JPEG[:2]+bytes(bytearray([i]))+JPEG[2:], "physical-test")
             self.assertEqual(seq,i+1)
         self.assertTrue(m.verify_payload(*self.read(m.SLOT_COUNT+3)))
         self.writer.close()
