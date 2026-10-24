@@ -11,7 +11,7 @@ Unlike the earlier scripts and the Python virtual-only browser interface, Founta
 Its window provides:
 
 - Blackmagic HDMI input for physical capture, or visibly labeled **virtual color bars** for internal testing, with no external video or MacBook required.
-- **Auto · scan 4 formats** (1080p30, 1080p25, 720p60, 720p50), plus manual format selection. Modes are tried sequentially; failed modes release the stream before the next attempt. No system monitor modes are changed.
+- **Auto · Nikon D5200 (6 formats)** (PAL: 720p50, 1080i50, 1080p25; NTSC: 720p59.94, 1080i59.94, 1080p29.97), plus manual exact-rate choices. Modes are tried sequentially, prioritizing PAL for the connected D5200; failed modes release the stream before the next attempt. No system monitor modes are changed. See the [D5200-specific setup](../../docs/nikon-d5200-hdmi-setup-2026-10-24.md).
 - Native **Start/Stop**, with callback counts, no-source status, and clean stream release.
 - Live video preview using 8-bit YUV 4:2:2 to RGBA conversion when the device actually delivers valid frames.
 - **Save current frame…** to a user-chosen PNG path.
