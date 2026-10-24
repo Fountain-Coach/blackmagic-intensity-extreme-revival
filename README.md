@@ -89,6 +89,14 @@ In a separate, deliberately bounded live vendor baseline, the improved [capture 
 
 Our independent [A124 register contract](src/intensity-register-contract.c) combines the model-specific firmware/version and video-status gates with an injectable read-only register callback. **Twelve mocked BAR0 contract tests passed on both Sierra and Ubuntu.** It has not been bound to physical PCI memory, and no independent capture driver has been loaded. The operating hardware still requires a verified recovery boot and an actual compatible unprotected input signal. See [complete 24 October test evidence](tests/2026-10-24-hdmi-source-gated-capture-and-read-contract.md) and [D4 physical acceptance](https://github.com/Fountain-Coach/blackmagic-intensity-extreme-revival/issues/8).
 
+## Fountain Video — native Sierra application (24 October 2026)
+
+**Fountain Video.app has been built and launched on the real 2011 Intel Mac mini.** This is a native AppKit application, rather than another Python-only video simulation or command-line diagnostic. It is installed in the Sierra account's personal Applications folder and communicates directly with the existing Desktop Video 10.4 runtime, bypassing the isolated crash-prone CoreMediaIO plug-in.
+
+The window provides Blackmagic HDMI capture, automatic scanning of four common video modes, real-frame preview, PNG still export, QuickTime MOV recording, and a conspicuously identified synthetic video source. On Sierra, the application has passed its actual GUI launch, hardware discovery, synthetic movie-encoding and virtual-preview tests. An automatic four-format scan completed cleanly and reported no input signal. **No physical HDMI frame has yet been captured.** The MacBook is neither required nor changed as a test source.
+
+The app uses only the installed legacy Blackmagic user-space API; the experimental independent PCI kernel driver remains offline. Real HDMI preview and recording paths exist but are not yet accepted against genuine frame data. [Source, build instructions, and test results](apps/fountain-video-sierra/README.md).
+
 ## Why this matters
 
 Keeping functional equipment in use may reduce electronic waste and the embodied impacts of purchasing replacement devices. But *carbon savings are not assumed*. An old computer also consumes power, and reverse-engineering activity has a cost. Our [sustainability ledger](docs/sustainability.md) explains which data would justify a real claim.
