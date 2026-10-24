@@ -21,6 +21,7 @@
 #include <string.h>
 #include <vector>
 #include <mach/mach_time.h>
+#include <sys/stat.h>
 
 typedef void* (*FCFactory)(void);
 typedef int32_t (*FCNext)(void*, void**);
@@ -1132,6 +1133,97 @@ static int runFixedSilverHDMIAppTest(void) {
         exit(preview?0:68);
     }
 }
+// Explicit, bounded live-transport acceptance: real silver HDMI -> native AppKit
+// -> authenticated private SSH loopback -> separate Ubuntu Linux Docker scratch.
+// No public LAN listener. Never run this test without operator-owned fixture.
+static int runFixedSilverDockerLiveTest(void) {
+    @autoreleasepool {
+        if(!fcSilverFixedBMD1080p30()) {
+            puts("stage=native_docker_live result=wrong_physical_fixture");
+            return 70;
+        }
+        const char* rawPath=getenv("FOUNTAIN_TEST_DOCKER_STAGING_SECRET");
+        if(!rawPath || !*rawPath) {
+            puts("stage=native_docker_live result=missing_private_secret");
+            return 71;
+        }
+        struct stat st;
+        if(stat(rawPath,&st)!=0 || !S_ISREG(st.st_mode) ||
+           (st.st_mode & 0077)!=0) {
+            puts("stage=native_docker_live result=secret_file_not_private");
+            return 72;
+        }
+        NSString* tokenPath=[NSString stringWithUTF8String:rawPath];
+        NSString* contents=[NSString stringWithContentsOfFile:tokenPath
+                                 encoding:NSUTF8StringEncoding error:nil];
+        NSString* token=[contents stringByTrimmingCharactersInSet:
+                         [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        if(token.length<32) {
+            puts("stage=native_docker_live result=invalid_private_secret");
+            return 73;
+        }
+        // Only the loopback port provisioned by our preflight SSH tunnels.
+        NSURL* endpoint=[NSURL URLWithString:
+                  @"http://127.0.0.1:8473/api/scratch/ingest"];
+        FCScratchPublisher* publisher=[[FCScratchPublisher alloc]
+                                 initWithEndpoint:endpoint token:token];
+        if(!publisher) return 74;
+        NSApplication* app=[NSApplication sharedApplication];
+        [app setActivationPolicy:NSApplicationActivationPolicyAccessory];
+        FountainController* controller=[FountainController new];
+        [controller buildWindow];
+        [controller.sourceChoice selectItemAtIndex:0];
+        [controller sourceChanged:nil];
+        [controller startPressed:nil];
+        if(!controller.captureActive) {
+            puts("stage=native_docker_live result=hardware_lock_failed");
+            [controller stopCurrent:NO]; [controller closeDevice];
+            fflush(stdout); exit(75);
+        }
+        // The physical source is the Mac's main display. Sharing is briefly
+        // enabled ONLY within this explicitly requested isolated test.
+        controller.scratchPublisher=publisher;
+        [controller.scratchShareToggle setState:NSControlStateValueOn];
+        [controller scratchShareChanged:nil];
+        NSDate* deadline=[NSDate dateWithTimeIntervalSinceNow:3.4];
+        while([deadline timeIntervalSinceNow]>0) {
+            [[NSRunLoop currentRunLoop]
+                runUntilDate:[NSDate dateWithTimeIntervalSinceNow:.07]];
+        }
+        [controller.scratchShareToggle setState:NSControlStateValueOff];
+        [controller scratchShareChanged:nil];
+        // Finish pending HTTP callbacks, without sending new frames.
+        deadline=[NSDate dateWithTimeIntervalSinceNow:0.65];
+        while([deadline timeIntervalSinceNow]>0) {
+            [[NSRunLoop currentRunLoop]
+                runUntilDate:[NSDate dateWithTimeIntervalSinceNow:.08]];
+        }
+        const NSUInteger delivered=[publisher delivered];
+        const NSUInteger failed=[publisher failed];
+        const BOOL nativeImage=controller.lastFrame!=nil &&
+            !controller.stage.synthetic && controller.lastWidth==1920 &&
+            controller.lastHeight==1080;
+        [controller stopCurrent:NO];
+        [controller closeDevice];
+        controller.window.delegate=nil;
+        [controller.window orderOut:nil];
+        [controller.window close];
+        controller.window=nil;
+        app.delegate=nil;
+        const BOOL accepted=nativeImage && delivered>=2 &&
+            controller.scratchShareToggle.state==NSControlStateValueOff &&
+            !controller.captureActive;
+        printf("stage=native_docker_live result=%s "
+               "physical_rgba=%u authenticated_post_delivered=%lu "
+               "post_failed=%lu main_desktop_share_after_test=OFF "
+               "destination=localhost_ssh_to_ubuntu_docker "
+               "clean_capture_release=1\n",
+               accepted?"pass":"fail",(unsigned)nativeImage,
+               (unsigned long)delivered,(unsigned long)failed);
+        fflush(stdout);
+        exit(accepted?0:76);
+    }
+}
 static int runAutoScanSelfTest(void) {
     @autoreleasepool {
         NSApplication *app=[NSApplication sharedApplication];
@@ -1214,6 +1306,8 @@ int main(int argc,char **argv) {
         return runWindowSelfTest();
     if (argc==2 && !strcmp(argv[1],"--self-test-fixed-silver-hdmi"))
         return runFixedSilverHDMIAppTest();
+    if (argc==2 && !strcmp(argv[1],"--self-test-fixed-silver-hdmi-live-docker"))
+        return runFixedSilverDockerLiveTest();
     if (argc==2 && !strcmp(argv[1],"--self-test-autoscan"))
         return runAutoScanSelfTest();
     if (argc==2 && !strcmp(argv[1],"--self-test-movie"))
