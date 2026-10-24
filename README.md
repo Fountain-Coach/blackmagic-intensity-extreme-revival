@@ -10,16 +10,22 @@ Inspired by the practical spirit of a *Repair Café*: understand what is broken,
 
 **Independent-driver progress (23 October 2026):** our own [I/O Kit PCI inventory](src/intensity-pci-inventory.c) detected the actual Intensity Extreme on macOS Sierra, and a separate [read-only resource probe](src/intensity-pci-resources.c) reported two 1 MiB PCI memory-resource descriptors. A [passive Sierra kernel-driver skeleton](driver/sierra/passive/) builds from a clean Git checkout and passes offline linkage diagnostics, but has **not been loaded or matched to the device**; the original kernel driver remains active. This is driver-development progress, not captured video. [Sierra tests](tests/2026-10-23-independent-driver-sierra-offline.md) · [PCI resource evidence](tests/2026-10-23-pci-resource-layout.md).
 
-## Try the software simulation — no additional hardware required
+## Full software video laboratory — primary development path
 
-The [Fountain Virtual Video Instrument](docs/virtual-video-instrument.md) models the original device's video modes, deterministic YUV 4:2:2 frames, frame timing, source loss, format mismatch, protected input and strict half-duplex operation. It is a **replaceable software backend**, not a claim of a repaired HDMI receiver. The iPad-friendly browser preview is served by a small Python HTTP process on a trusted local host.
+**No physical source required.** The Nikon D5200 may remain switched off. Real HDMI inputs and outputs, Syphon, DeckLinkAPI and proprietary drivers are **not dependencies** of the video instrument's simulated feature contract.
 
-```sh
-python3 -m unittest discover -s simulator/tests -v
-python3 -m simulator.server --host 127.0.0.1 --port 8172
-```
+The [full software video laboratory](docs/full-software-video-laboratory.md) models a camera, two separate half-duplex video instruments, virtual video playback into a virtual receiver, 16 video formats, deterministic full-resolution YUV frames, stereo PCM audio, scheduled output buffers, rational timestamps, format hot-swap, no-signal, protected-input blocking, dropped frames, fault recovery and a bounded raw video/audio archive.
 
-Open `http://127.0.0.1:8172/` on the host. See the [simulator design and API](docs/virtual-video-instrument.md) for trusted LAN access. **No Syphon, Blackmagic SDK or third-party Python dependency** is required. Synthetic frames are visibly marked, and real hardware validation remains separate.
+**Open the live software lab on the private WLAN:** http://192.168.8.50:8272/lab
+
+The real Sierra [Fountain Video.app](apps/fountain-video-sierra/README.md) now starts in **synthetic video mode** rather than scanning Blackmagic hardware and includes a **Software lab…** button to open the full simulation. Optional real capture remains a separate backend.
+
+Reproduce the laboratory with Python 3.10+ standard library only:
+
+    python3 -m unittest discover -s simulator/tests -v
+    python3 -m simulator.lab_server --host 127.0.0.1 --port 8272
+
+The original minimal simulator remains separately available through the earlier 'simulator.server' command on port 8172. All generated media and HTTP outputs are explicitly marked **SYNTHETIC**; none establishes actual HDMI capture.
 
 ## Legacy driver failure affecting other macOS applications
 
