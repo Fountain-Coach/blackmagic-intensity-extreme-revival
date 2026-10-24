@@ -63,8 +63,10 @@
 @end
 
 int main(int argc,char**argv) {
-    if(argc!=2 || strcmp(argv[1],"--fixed-silver-pattern-20s")){
-        fprintf(stderr,"opt-in --fixed-silver-pattern-20s only\n");
+    const int seconds=(argc==2 && strcmp(argv[1],"--fixed-silver-pattern-20s")==0) ? 20 :
+                      (argc==2 && strcmp(argv[1],"--fixed-silver-pattern-3s")==0) ? 3 : 0;
+    if(!seconds){
+        fprintf(stderr,"opt-in --fixed-silver-pattern-20s or --fixed-silver-pattern-3s only\n");
         return 64;
     }
     char model[64]={0};size_t cap=sizeof(model);
@@ -110,21 +112,25 @@ int main(int argc,char**argv) {
         NSTimer* timer=[NSTimer scheduledTimerWithTimeInterval:0.1
                          target:control selector:@selector(tick:) userInfo:nil repeats:YES];
         printf("stage=fixed_hdmi_pattern source=only_silver_hdmi"
-               " mode=1920x1080@30 duration_s=20 private_desktop_hidden=1"
-               " publishing=0\n");
+               " mode=1920x1080@30 duration_s=%d private_desktop_hidden=1"
+               " publishing=0\n",seconds);
         fflush(stdout);
-        NSDate* until=[NSDate dateWithTimeIntervalSinceNow:20.0];
+        NSDate* until=[NSDate dateWithTimeIntervalSinceNow:(NSTimeInterval)seconds];
         while([until timeIntervalSinceNow]>0){
             [[NSRunLoop currentRunLoop] runUntilDate:
                            [NSDate dateWithTimeIntervalSinceNow:0.08]];
         }
         [timer invalidate];
         [win orderOut:nil];
-        [win close];
         printf("stage=fixed_hdmi_pattern result=completed frames_drawn=%lu"
                " window_removed=1 source_mode_unchanged=1\n",
                (unsigned long)pattern.frameIndex);
         fflush(stdout);
+        // The original 20s run displayed/removed its window but later exited
+        // SIGSEGV during Sierra's legacy AppKit object teardown. This
+        // one-shot diagnostic has no live resources after orderOut; _exit
+        // prevents a destructor crash from misreporting successful display.
+        _exit(0);
     }
     return 0;
 }
