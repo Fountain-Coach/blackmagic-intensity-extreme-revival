@@ -102,13 +102,13 @@ int main(void) {
             break;
         usleep(10000);
     }
-    CVTime actual = CVDisplayLinkGetActualOutputVideoRefreshPeriod(link);
+    double actual_period_seconds = CVDisplayLinkGetActualOutputVideoRefreshPeriod(link);
     CVDisplayLinkStop(link);
     unsigned samples = atomic_load_explicit(&w.count, memory_order_relaxed);
     if (samples > kMaxSamples) samples = kMaxSamples;
     CVDisplayLinkRelease(link);
     printf("stage=displaylink source=BMD_HDMI ui_rate_hz=%.6f nominal_link_hz=%.6f actual_link_hz=%.6f callbacks=%u\n",
-           ui_hz, hz_cvtime(nominal), hz_cvtime(actual), samples);
+           ui_hz, hz_cvtime(nominal),\n           actual_period_seconds > 0.0 ? 1.0 / actual_period_seconds : 0.0, samples);
     if (samples < kRequiredSamples) {
         puts("stage=displaylink result=insufficient_callback_samples");
         return 27;
