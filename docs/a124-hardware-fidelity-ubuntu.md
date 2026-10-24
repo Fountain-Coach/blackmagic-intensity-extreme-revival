@@ -1,6 +1,8 @@
 # A124 hardware fidelity on current Ubuntu
 
-**Decision, 24 October 2026:** Preserve the original silver Mac mini and original Intensity Extreme as *physical evidence*. Implement and test the hardware-interface contract on the **existing Ubuntu 24.04 Mac mini**, virtualizing only unobserved/temporarily disconnected interface behavior as explicitly SYNTHETIC replay. Do not replace native hardware observations with tests of a simulated finished application.
+**Scope clarification (2026-10-24):** This document remains an optional *Ubuntu physical-driver research lane*, not the current deployment plan. The user explicitly selected the silver Mac's native Sierra Thunderbolt attachment plus a Linux/Docker guest for downstream capture services. The separately located Ubuntu Mac mini does not physically enumerate the A124, and Sierra-hosted Docker cannot pass through the PCI function. See [current silver guest witness](../tests/2026-10-24-silver-sierra-docker-runtime.md) and [deployment boundary](sierra-docker-capture-boundary.md).
+
+**Historical optional research decision, 24 October 2026 (superseded for deployment):** Preserve the original silver Mac mini and original Intensity Extreme as *physical evidence*. Implement and test the hardware-interface contract on the **existing Ubuntu 24.04 Mac mini**, virtualizing only unobserved/temporarily disconnected interface behavior as explicitly SYNTHETIC replay. Do not replace native hardware observations with tests of a simulated finished application.
 
 **Correction:** Sierra OS rehabilitation, a Desktop Video 10.11.2 installation and its recovery procedure are NOT prerequisites to the independent Ubuntu hardware engineering path. Their evidence remains useful as historical research but does not own this project's development lane.
 

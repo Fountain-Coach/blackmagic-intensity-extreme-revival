@@ -1,0 +1,24 @@
+# 2026-10-24 — HDMI 2 feedback and output-mode differential
+
+## User optical observation
+Samsung HDMI 2 connected to original Blackmagic Intensity Extreme HDMI OUT. Operator reports repeated monitor on/off switching, no visible color-bar image, during 1080p30 vendor playback. HDMI has a bidirectional DDC/EDID control path and Hot Plug Detect, but its HDMI OUT TMDS video is not normally returned to the source. No independent image signal returns on this connector.
+
+## Fixed physical rig
+Original Macmini5,3 Sierra 10.12.6; original Blackmagic Desktop Video 10.4 and original Comdis/i-tec THUNDERDOCK2. Blackmagic PCI BDBD:A124 enumerates. The silver Mac's ordinary desktop displays over the unchanged i-tec HDMI lane. Blackmagic HDMI IN is intentionally disconnected; its HDMI OUT goes to Samsung HDMI 2. No device, cable, OS, driver or firmware alteration was performed.
+
+## Digital output acceptance is NOT physical monitor acceptance
+Original source-owned 1080p30 UYVY synthetic color bars and moving marker were run through real IDeckLinkOutput. The 60-second test accepted 1,425 frames and reported 59 matching mode seconds, zero errors, clean output stop. The 300-second test accepted 7,120 frames and reported 300 matching mode seconds, zero errors, clean output stop. These are genuine driver/API results. Operator-observed optical failure remains; the HDMI monitor did not show the bars.
+
+## Live output-sink EDID probe
+Source: src/decklink-hdmi-output-ddc-differential-readonly.cpp. Direct original-vendor IDeckLinkStatus::GetBytes('edid') with buffers of 512, 4096 and 8192 bytes, both while active 1080p30 output and after disable, always returned code 0x80000003, reported 4096 bytes, and yielded NO valid EDID. This was not a mere small 512-byte buffer issue. The same requests during active 720p60 output failed identically. IDeckLinkStatus::GetInt('cvom') did report Hp30 and later hp60, but that is the current requested/selected output mode, NOT a proven electrical signal, detected connected sink, HPD, optical pixels or sink lock. The original card/driver does not expose useful received monitor EDID via the tested API. Modern SDK documentation for ReceivedEDID does not promise 2015 Intensity Extreme driver support.
+
+## Physical connector routing
+Source: src/decklink-silver-output-connector-readonly.cpp. Configuration GetInt('vocn') returned 0x0000000a, the bitmask HDMI (0x2) | component (0x8); supported output mask 0x0000003a. HDMI IS selected, though not exclusively. A volatile SetInt('vocn',0x2) returned S_OK but immediate independent GetInt STILL returned 0x0000000a, so there was no observable effective connector-routing change. The bounded experiment refused playback and the original value remained intact; no preferences were written. This is not evidence of a repaired HDMI route. Diagnostic source was corrected to label successful SetInt with unchanged readback NO_EFFECT rather than completed HDMI-only selection.
+
+## Alternative output timing
+Source: src/decklink-hdmi2-720p60-output-comparison.cpp. A separate, bounded 90-second generated YUV color-bar output was started on original Sierra at ~20:09:10 CEST in 1280x720/60 Hz ('hp60'). Device reported mode support and EnableVideoOutput rc=0; vendor status changed to hp60. The complete original-hardware 90-second 720p60 comparison accepted 4,061 frames, reported 89 matching mode seconds, zero API errors, clean output disable, and process exit. The original output route remained 0x0a after the test (HDMI selected plus component); an independent post-test read-only probe confirmed this. Monitor EDID remained unavailable with all tested buffer sizes while the card was active. This is a deliberate video-timing contrast, not proof of actual monitor video. The operator's optical report about 720p60 remains outstanding.
+
+## Scope and conclusion
+HDMI is indeed bidirectional for low-rate control, NOT reciprocal full video recording. We extracted available status: physical PCI presence, connector selection, output mode and actual vendor frame submissions. Legacy HDMI EDID status is inaccessible on this exact card/driver, and no independent HPD or returned optical pixels have been established. The original monitor on/off switching is not explained by the API success. Without an independent HDMI sink probe/optical witness the exact electrical wire/sink failure is unresolved. Do not falsely claim visual success or alter physical fixture. Original Sierra, Linux guest (stopped), Syphon and existing WLAN are preserved; PR #10 stays DRAFT.
+
+References: https://sdk-doc.blackmagicdesign.com/decklink-sdk/DeckLinkAPI/enums/bmddecklinkstatusid.html ; https://ez.analog.com/video/a/documents/do9248/extended-display-identification-data ; https://chromium.googlesource.com/chromium/src/+/refs/heads/main/third_party/decklink/mac/include/DeckLinkAPIConfiguration.h

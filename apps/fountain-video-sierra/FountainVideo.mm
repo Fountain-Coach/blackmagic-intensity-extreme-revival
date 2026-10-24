@@ -20,6 +20,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <vector>
+#include <mach/mach_time.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 typedef void* (*FCFactory)(void);
 typedef int32_t (*FCNext)(void*, void**);
@@ -30,13 +33,39 @@ typedef int32_t (*FCNoArg)(void*);
 typedef int32_t (*FCSetCallback)(void*, void*);
 typedef int32_t (*FCGetFlag)(void*, uint32_t, bool*);
 typedef int32_t (*FCGetInt)(void*, uint32_t, int64_t*);
+typedef int32_t (*FCSetInt)(void*, uint32_t, int64_t);
 typedef uint32_t (*FCFrameFlags)(void*);
 typedef long (*FCFrameDimension)(void*);
 typedef int32_t (*FCFrameBytes)(void*, void**);
-typedef int32_t (*FCFrameTime)(void*, int64_t*, int64_t*, int64_t);
 
+// Never store the local HDMI mailbox bearer token in macOS preferences.
+// Only the Sierra user's existing 0600 local file may authorize loopback
+// upload. The Linux Scratch receiver has a separate, never-exported token.
+static NSString *fcLocalHDMIMailboxToken() {
+    NSString *path=[NSHomeDirectory() stringByAppendingPathComponent:
+                     @".config/fountain-video/serial-local-ingest-token"];
+    struct stat entry;
+    if(lstat(path.fileSystemRepresentation,&entry)!=0 ||
+       !S_ISREG(entry.st_mode) || (entry.st_mode & 0077)!=0 ||
+       entry.st_uid!=getuid() || entry.st_nlink!=1) return nil;
+    NSError *error=nil;
+    NSString *token=[NSString stringWithContentsOfFile:path
+                        encoding:NSUTF8StringEncoding error:&error];
+    if(error || !token)return nil;
+    token=[token stringByTrimmingCharactersInSet:
+              [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    return token.length>=32 ? token : nil;
+}
 static const unsigned char kInputIID[16] =
     {0xaf,0x22,0x76,0x2b,0xdf,0xac,0x48,0x46,0xaa,0x79,0xfa,0x88,0x83,0x56,0x09,0x95};
+static const unsigned char kOriginalConfigurationIID[16] =
+    {0x1e,0x69,0xfc,0xf6,0x42,0x03,0x49,0x36,
+     0x80,0x76,0x2a,0x9f,0x4c,0xfd,0x50,0xcb};
+static const uint32_t kVideoOutputIdleOperation = 0x766f696f; // voio
+static const uint32_t kVideoOutputDefaultMode = 0x64766f6d; // dvom
+static const uint32_t kIdleBlackFrame = 0x626c6163; // blac
+static const uint32_t kDefault1080i50 = 0x48693530; // Hi50
+static const uint32_t kMatched1080p30 = 0x48703330; // Hp30
 static const unsigned char kStatusIID[16] =
     {0x5f,0x55,0x82,0x00,0x40,0x28,0x49,0xbc,0xbe,0xac,0xdb,0x3f,0xa4,0xa9,0x6e,0x46};
 static const unsigned char kCallbackIID[16] =
@@ -45,6 +74,30 @@ static const unsigned char kUnknownIID[16] =
     {0,0,0,0,0,0,0,0,0xc0,0,0,0,0,0,0,0x46};
 static const uint32_t kPixel2vuy = 0x32767579;
 static const uint32_t kNoInputSource = 0x80000000u;
+// Fixed rig: silver Mac HDMI OUT -> Intensity Extreme HDMI IN (same Mac via Thunderbolt).
+static BOOL fcSilverFixedBMD1080p30() {
+    CGDirectDisplayID ids[32]={0};
+    uint32_t count=0;
+    if(CGGetOnlineDisplayList(32,ids,&count)!=kCGErrorSuccess)return NO;
+    for(uint32_t i=0;i<count;++i) {
+        CGDirectDisplayID display=ids[i];
+        if(CGDisplayVendorNumber(display)!=8961 ||
+           CGDisplayPixelsWide(display)!=1920 ||
+           CGDisplayPixelsHigh(display)!=1080)continue;
+        CGDisplayModeRef mode=CGDisplayCopyDisplayMode(display);
+        const double hz=mode?CGDisplayModeGetRefreshRate(mode):0;
+        if(mode)CGDisplayModeRelease(mode);
+        if(hz>29.9 && hz<30.1)return YES;
+    }
+    return NO;
+}
+// Avoid the 10.4 frame GetStreamTime method: independently crash-isolated.
+static int64_t fcHostTicks30000() {
+    mach_timebase_info_data_t base={0,0};
+    if(mach_timebase_info(&base)!=KERN_SUCCESS || !base.denom)return -1;
+    const __uint128_t scaled=(__uint128_t)mach_absolute_time()*base.numer*30000u;
+    return (int64_t)(scaled/((__uint128_t)base.denom*1000000000u));
+}
 static CFUUIDBytes fcUUID(const unsigned char *id) {
     CFUUIDBytes result; memcpy(&result, id, 16); return result;
 }
@@ -168,6 +221,7 @@ struct FCCallback {
     std::atomic<uint64_t> valid;
     std::atomic<uint64_t> noSource;
     std::atomic<uint32_t> sequence;
+    std::atomic<uint32_t> pendingMain;
     void *context;
 };
 static uint32_t fcAddRef(FCCallback *c) { return ++c->refs; }
@@ -189,33 +243,39 @@ static int32_t fcFormatChange(FCCallback*,uint32_t,void*,uint32_t) { return 0; }
 @end
 
 static int32_t fcVideoFrame(FCCallback *cb, void *frame, void*) {
-    if (!frame) return 0;
+    if(!frame)return 0;
     ++cb->frames;
-    void **vt = *(void***)frame;
-    const uint32_t flags = ((FCFrameFlags)vt[7])(frame);
-    if (flags & kNoInputSource) { ++cb->noSource; return 0; }
+    void** vt=*(void***)frame;
+    const uint32_t flags=((FCFrameFlags)vt[7])(frame);
+    if(flags & kNoInputSource) { ++cb->noSource; return 0; }
     ++cb->valid;
-    // Decimate preview only; all true callback frame counts are preserved.
-    if (cb->sequence.fetch_add(1) % 3) return 0;
-    long width=((FCFrameDimension)vt[3])(frame);
-    long height=((FCFrameDimension)vt[4])(frame);
-    long stride=((FCFrameDimension)vt[5])(frame);
-    if (width<2 || height<1 || width>4096 || height>2160 ||
-        stride < width*2 || stride>65536 || (width&1)) return 0;
+    // Decimate to a bounded five frame/s preview while counting all callbacks.
+    if(cb->sequence.fetch_add(1)%6)return 0;
+    const long w=((FCFrameDimension)vt[3])(frame);
+    const long h=((FCFrameDimension)vt[4])(frame);
+    const long rb=((FCFrameDimension)vt[5])(frame);
+    if(w!=1920 || h!=1080 || rb!=3840 || cb->pendingMain.load()>=2)return 0;
     void* ptr=NULL;
-    if (((FCFrameBytes)vt[8])(frame,&ptr) || !ptr) return 0;
-    int64_t t=0,d=0;
-    BOOL timingOK=((FCFrameTime)vt[11])(frame,&t,&d,30000)==0 && d>0;
+    if(((FCFrameBytes)vt[8])(frame,&ptr) || !ptr)return 0;
+    const int64_t hostTicks=fcHostTicks30000();
+    if(hostTicks<0)return 0;
     @autoreleasepool {
-        NSData *rgba=rgbaFrom2vuy((const uint8_t*)ptr,
-                                 (size_t)stride*(size_t)height,
-                                 width,height,stride);
-        if (!rgba) return 0;
+        // 4,147,200 bytes are copied while the SDK's borrowed frame is valid.
+        // Never access a vendor frame from the dispatched AppKit block.
+        NSData *own=[NSData dataWithBytes:ptr length:(NSUInteger)(rb*h)];
+        if(!own)return 0;
+        ++cb->pendingMain;
         FountainController *owner=(__bridge FountainController*)cb->context;
         dispatch_async(dispatch_get_main_queue(), ^{
-            [owner acceptHardwareRGBA:rgba width:(NSUInteger)width
-                                 height:(NSUInteger)height ticks:t duration:d
-                          timestampValid:timingOK];
+            @autoreleasepool {
+                NSData *rgba=rgbaFrom2vuy((const uint8_t*)own.bytes,
+                                         own.length,w,h,rb);
+                if(rgba)[owner acceptHardwareRGBA:rgba width:(NSUInteger)w
+                                            height:(NSUInteger)h
+                                             ticks:hostTicks duration:1000
+                                    timestampValid:YES];
+            }
+            --cb->pendingMain;
         });
     }
     return 0;
@@ -315,6 +375,8 @@ static void* kCallbackVtable[5] = {
     std::vector<FCCallback*> _pastCallbacks;
     uint32_t _selectedMode;
     BOOL _hardwareLocked;
+    void *_heldOutputConfiguration;
+    BOOL _outputDefaultChangedByThisApp;
 }
 static NSTextField *fcLabel(NSRect frame, NSString *title, CGFloat font,
                             NSColor *color, BOOL bold) {
@@ -428,7 +490,7 @@ static NSButton *fcButton(NSRect frame,NSString *title, id target, SEL action) {
     self.scratchShareToggle=[[NSButton alloc]
                       initWithFrame:NSMakeRect(818,12,277,30)];
     [self.scratchShareToggle setButtonType:NSButtonTypeSwitch];
-    self.scratchShareToggle.title=@"Stream frames to private browser";
+    self.scratchShareToggle.title=@"Share video with private receiver";
     self.scratchShareToggle.font=[NSFont systemFontOfSize:11];
     self.scratchShareToggle.target=self;
     self.scratchShareToggle.action=@selector(scratchShareChanged:);
@@ -439,6 +501,78 @@ static NSButton *fcButton(NSRect frame,NSString *title, id target, SEL action) {
                              12,muted,NO)];
     [self.window makeKeyAndOrderFront:nil];
     [NSApp activateIgnoringOtherApps:YES];
+}
+// Reversible user-space correction for old Desktop Video 10.4:
+//
+// The original Intensity Extreme defaults to 1080i50 ('Hi50') while
+// the *only final source* is silver HDMI 1080p30. That mismatch causes the
+// external reference monitor to reacquire sync between playback sessions.
+// We hold a config reference so output stays 1080p30 for this GUI session.
+//
+// CRITICAL: idle operation remains BLACK ('blac'), never LastFrame: this
+// prevents displaying a previously captured private desktop after playback.
+// There is NO WriteConfigurationToPreferences, sudo, daemon or KEXT change.
+// Releasing this COM config automatically restores the driver default.
+- (void)holdOriginalOutputIdleStandard {
+    if(!_device || _heldOutputConfiguration || !fcSilverFixedBMD1080p30())return;
+    void* config=nullptr;
+    const int32_t queryRC=((FCQuery)(*(void***)_device)[0])(
+        _device,fcUUID(kOriginalConfigurationIID),&config);
+    if(queryRC || !config) {
+        NSLog(@"FountainVideo idle output config unavailable rc=0x%08x",
+              (unsigned)queryRC);
+        return;
+    }
+    void** vt=*(void***)config;
+    int64_t idle=0,defaultMode=0;
+    const int32_t idleRC=((FCGetInt)vt[6])(config,kVideoOutputIdleOperation,&idle);
+    const int32_t modeRC=((FCGetInt)vt[6])(config,kVideoOutputDefaultMode,&defaultMode);
+    if(idleRC || modeRC || (uint32_t)idle!=kIdleBlackFrame) {
+        NSLog(@"FountainVideo idle video must remain black; no changes");
+        ((FCRelease)vt[2])(config);
+        return;
+    }
+    if((uint32_t)defaultMode==kMatched1080p30) {
+        _heldOutputConfiguration=config;
+        _outputDefaultChangedByThisApp=NO;
+        self.deviceDetails.stringValue=@"Intensity Extreme · HDMI output 1080p30 · idle black";
+        return;
+    }
+    if((uint32_t)defaultMode!=kDefault1080i50) {
+        NSLog(@"FountainVideo unexpected output default 0x%08x; no changes",
+              (unsigned)(uint32_t)defaultMode);
+        ((FCRelease)vt[2])(config);
+        return;
+    }
+    const int32_t setRC=((FCSetInt)vt[5])(
+        config,kVideoOutputDefaultMode,(int64_t)kMatched1080p30);
+    int64_t verifiedMode=0,verifiedIdle=0;
+    const int32_t mr=((FCGetInt)vt[6])(config,kVideoOutputDefaultMode,&verifiedMode);
+    const int32_t ir=((FCGetInt)vt[6])(config,kVideoOutputIdleOperation,&verifiedIdle);
+    if(setRC || mr || ir || (uint32_t)verifiedMode!=kMatched1080p30 ||
+       (uint32_t)verifiedIdle!=kIdleBlackFrame) {
+        ((FCSetInt)vt[5])(config,kVideoOutputDefaultMode,(int64_t)kDefault1080i50);
+        NSLog(@"FountainVideo output standard session hold refused rc=0x%08x",
+              (unsigned)setRC);
+        ((FCRelease)vt[2])(config);
+        return;
+    }
+    _heldOutputConfiguration=config;  // keep until closeDevice / app termination
+    _outputDefaultChangedByThisApp=YES;
+    self.deviceDetails.stringValue=@"Intensity Extreme · HDMI output 1080p30 · idle black";
+    NSLog(@"FountainVideo output_idle_default=Hp30 idle_picture=black "
+          "scoped_to_native_application=1 persistent_pref_write=0");
+}
+- (BOOL)verifyHeldOriginalOutputStandard {
+    if(!_heldOutputConfiguration)return NO;
+    void** vt=*(void***)_heldOutputConfiguration;
+    int64_t mode=0,idle=0;
+    int32_t m=((FCGetInt)vt[6])(_heldOutputConfiguration,
+                               kVideoOutputDefaultMode,&mode);
+    int32_t i=((FCGetInt)vt[6])(_heldOutputConfiguration,
+                               kVideoOutputIdleOperation,&idle);
+    return m==0 && i==0 && (uint32_t)mode==kMatched1080p30 &&
+           (uint32_t)idle==kIdleBlackFrame;
 }
 - (BOOL)openDevice {
     if (_device) return YES;
@@ -457,10 +591,34 @@ static NSButton *fcButton(NSRect frame,NSString *title, id target, SEL action) {
     ((FCRelease)vt[2])(iterator);
     if (rc || !_device) { [self closeDevice]; return NO; }
     self.deviceDetails.stringValue=@"Intensity Extreme · vendor driver 10.4";
+    [self holdOriginalOutputIdleStandard];
     return YES;
 }
 - (void)closeDevice {
     if (_input) return;  // stop capture first
+    if (_heldOutputConfiguration) {
+        void** cvt=*(void***)_heldOutputConfiguration;
+        if(_outputDefaultChangedByThisApp) {
+            int64_t observed=0,idle=0;
+            const int32_t m=((FCGetInt)cvt[6])(_heldOutputConfiguration,
+                                                kVideoOutputDefaultMode,&observed);
+            const int32_t i=((FCGetInt)cvt[6])(_heldOutputConfiguration,
+                                                kVideoOutputIdleOperation,&idle);
+            if(m==0 && i==0 && (uint32_t)observed==kMatched1080p30 &&
+               (uint32_t)idle==kIdleBlackFrame) {
+                const int32_t rc=((FCSetInt)cvt[5])(
+                    _heldOutputConfiguration,kVideoOutputDefaultMode,
+                    (int64_t)kDefault1080i50);
+                NSLog(@"FountainVideo original output mode restore rc=0x%08x",
+                      (unsigned)rc);
+            } else {
+                NSLog(@"FountainVideo original mode not restored: changed elsewhere");
+            }
+        }
+        ((FCRelease)cvt[2])(_heldOutputConfiguration);
+        _heldOutputConfiguration=NULL;
+        _outputDefaultChangedByThisApp=NO;
+    }
     if (_device) {
         void **vt=*(void***)_device;
         ((FCRelease)vt[2])(_device); _device=NULL;
@@ -480,15 +638,65 @@ static NSButton *fcButton(NSRect frame,NSString *title, id target, SEL action) {
     ((FCRelease)vt[2])(status);
 }
 - (void)sourceChanged:(id)sender {
-    BOOL hardware=self.sourceChoice.indexOfSelectedItem==0;
-    self.formatChoice.enabled=hardware;
-    if (hardware && self.virtualActive)
-        [self setMessage:@"Blackmagic input suspended after Desktop Video 10.4 frame-release crash. Browser stream remains synthetic."];
+    const BOOL hardware=self.sourceChoice.indexOfSelectedItem==0;
+    // Critical privacy and source-ownership boundary: never let a previous
+    // synthetic/LAN publisher survive switching to the Mac's main HDMI screen.
+    self.scratchPublisher.enabled=NO;
+    self.scratchPublisher=nil;
+    [self.scratchShareToggle setState:NSControlStateValueOff];
+    [self.scratchShareToggle setTitle:hardware?
+        @"Share HDMI with local Linux Docker":
+        @"Share generated video with private browser"];
+    if(hardware) {
+        [self.formatChoice selectItemAtIndex:7]; // Exact silver HDMI: 1080p30
+        [self setMessage:@"Silver HDMI loopback · 1080p30 · private preview"];
+    }
+    self.formatChoice.enabled=NO;
 }
 - (void)scratchShareChanged:(id)sender {
-    if (self.scratchPublisher)
-        self.scratchPublisher.enabled =
-            self.scratchShareToggle.state==NSControlStateValueOn;
+    const BOOL share=self.scratchShareToggle.state==NSControlStateValueOn;
+    if(!share) {
+        self.scratchPublisher.enabled=NO;
+        self.scratchPublisher=nil;
+        return;
+    }
+    if(self.scratchPublisher) {
+        self.scratchPublisher.enabled=YES;
+        return;
+    }
+    const BOOL hardware=self.sourceChoice.indexOfSelectedItem==0;
+    NSURL *destination=nil;
+    NSString *token=nil;
+    if(hardware) {
+        if(!fcSilverFixedBMD1080p30()) {
+            [self.scratchShareToggle setState:NSControlStateValueOff];
+            [self setMessage:@"Fixed BMD HDMI source missing. No publishing."];
+            return;
+        }
+        token=fcLocalHDMIMailboxToken();
+        destination=[NSURL URLWithString:
+             @"http://127.0.0.1:8483/api/scratch/ingest"];
+    } else {
+        NSUserDefaults *prefs=[NSUserDefaults standardUserDefaults];
+        destination=[NSURL URLWithString:
+             [prefs stringForKey:@"FountainVideoScratchEndpoint"]?:@""];
+        token=[prefs stringForKey:@"FountainVideoScratchToken"];
+    }
+    if(token.length<32 || !destination) {
+        [self.scratchShareToggle setState:NSControlStateValueOff];
+        [self setMessage:@"Private video ingest not configured; sharing remains OFF."];
+        return;
+    }
+    self.scratchPublisher=[[FCScratchPublisher alloc]
+                             initWithEndpoint:destination token:token];
+    if(!self.scratchPublisher) {
+        [self.scratchShareToggle setState:NSControlStateValueOff];
+        [self setMessage:@"Private video ingest unavailable; sharing remains OFF."];
+        return;
+    }
+    [self setMessage:hardware ?
+       @"Local HDMI mailbox publishing armed (Docker receipt checked separately)" :
+       @"Private synthetic browser publishing armed"];
 }
 - (void)openBrowserScratch:(id)sender {
     NSString *configured=[[NSUserDefaults standardUserDefaults]
@@ -536,14 +744,10 @@ static NSButton *fcButton(NSRect frame,NSString *title, id target, SEL action) {
     }
 }
 - (void)startPressed:(id)sender {
-    // A real 1080p30 signal triggered a Desktop Video 10.4 destructor crash
-    // (CDeckLinkVideoInputFrame::Release) on this Sierra host. Preserve the
-    // working output/browser feed unless physical input has deliberately been
-    // re-authorized on an isolated, recovery-verified system.
-    if (self.sourceChoice.indexOfSelectedItem == 0 &&
-        ![[NSUserDefaults standardUserDefaults]
-                 boolForKey:@"FountainVideoAllowLegacyCapture"]) {
-        [self setMessage:@"Blackmagic physical input suspended: driver 10.4 crashed during real frame release. Existing virtual stream kept running."];
+    // Explicit fixed test rig. Reject any other monitor/mode before DeckLink I/O.
+    if(self.sourceChoice.indexOfSelectedItem==0 &&
+       !fcSilverFixedBMD1080p30()) {
+        [self setMessage:@"BMD HDMI 1920×1080@30 not verified. Capture not started."];
         return;
     }
     [self finishRecording];
@@ -590,16 +794,35 @@ static NSButton *fcButton(NSRect frame,NSString *title, id target, SEL action) {
     _callback->vt=kCallbackVtable;
     _callback->refs.store(1); _callback->frames.store(0);
     _callback->valid.store(0); _callback->noSource.store(0);
-    _callback->sequence.store(0); _callback->context=(__bridge void*)self;
+    _callback->sequence.store(0); _callback->pendingMain.store(0);
+    _callback->context=(__bridge void*)self;
     _pastCallbacks.push_back(_callback);
     void **inputTable=*(void***)_input;
-    rc=((FCSetCallback)inputTable[17])(_input,_callback);
-    if (rc) { [self setMessage:@"Cannot attach preview callback."];
-              [self stopCurrent:NO]; return; }
     rc=((FCEnableInput)inputTable[6])(_input,_selectedMode,kPixel2vuy,0);
-    if (rc) { [self setMessage:[NSString stringWithFormat:
-                              @"Cannot enable input (0x%08x).",(unsigned)rc]];
-              [self stopCurrent:NO]; return; }
+    if(rc) {
+        [self setMessage:[NSString stringWithFormat:
+                @"Cannot enable matched HDMI input (0x%08x).",(unsigned)rc]];
+        [self stopCurrent:NO]; return;
+    }
+    NSInteger stable=0;
+    for(NSInteger sample=0;sample<12 && stable<2;++sample) {
+        [self readSignalStatus];
+        stable=_hardwareLocked?stable+1:0;
+        if(stable<2)usleep(250000);
+    }
+    if(stable<2) {
+        ((FCNoArg)inputTable[7])(_input);
+        [self stopCurrent:NO];
+        [self setMessage:@"No HDMI signal lock. Capture NOT started."];
+        return;
+    }
+    rc=((FCSetCallback)inputTable[17])(_input,_callback);
+    if(rc) {
+        ((FCNoArg)inputTable[7])(_input);
+        [self stopCurrent:NO];
+        [self setMessage:@"Cannot attach captured-frame callback."];
+        return;
+    }
     self.captureActive=YES;
     rc=((FCNoArg)inputTable[13])(_input);
     if (rc) {
@@ -710,24 +933,16 @@ static NSButton *fcButton(NSRect frame,NSString *title, id target, SEL action) {
     self.stage.notice=nil;
     self.stage.synthetic=synthetic;
     [self.stage setNeedsDisplay:YES];
-    // Identical frame-publication path for synthetic and vendor-observed
-    // video. This is user-space, explicitly labeled and never a claim that
-    // HDMI was physically verified by our source-owned driver.
-    if (self.scratchShareToggle.state==NSControlStateValueOn) {
-        if (!self.scratchPublisher) {
-            NSUserDefaults *prefs=[NSUserDefaults standardUserDefaults];
-            NSURL *endpoint=[NSURL URLWithString:
-                [prefs stringForKey:@"FountainVideoScratchEndpoint"]?:@""];
-            NSString *token=[prefs stringForKey:@"FountainVideoScratchToken"];
-            if (token.length>=32)
-                self.scratchPublisher=[[FCScratchPublisher alloc]
-                                  initWithEndpoint:endpoint token:token];
-        }
-        if (self.scratchPublisher) {
+    // Physical capture is allowed to reach ONLY the Sierra-local 8483
+    // virtio-block mailbox when explicitly opted in. Synthetic publishing
+    // retains separately configured LAN scope. No source cross-publishing.
+    if(self.scratchShareToggle.state==NSControlStateValueOn) {
+        if(!self.scratchPublisher) [self scratchShareChanged:nil];
+        if(self.scratchPublisher) {
             int64_t ptsNs=(int64_t)((long double)ticks*
                                     1000000000.0L/30000.0L);
             [self.scratchPublisher publishImage:img ptsNs:ptsNs
-                            origin:synthetic?@"synthetic":@"decklink-observed"];
+                              origin:synthetic?@"synthetic":@"decklink-observed"];
         }
     }
     if (synthetic) {
@@ -899,12 +1114,20 @@ static NSButton *fcButton(NSRect frame,NSString *title, id target, SEL action) {
 }
 - (void)applicationDidFinishLaunching:(NSNotification*)notification {
     [self buildWindow];
-    // Software-first. Starting Fountain Video must not enumerate real
-    // capture hardware, require a powered camera or open a DeckLink client.
-    [self.sourceChoice selectItemAtIndex:1];
-    [self sourceChanged:nil];
-    self.deviceDetails.stringValue=@"Software simulation · hardware optional";
-    [self startPressed:nil];
+    // Hardware-first only on the operator's established silver HDMI self-loop.
+    // The strict source-mode gate and lock-before-stream protect other setups.
+    // LAN frame sharing is switched OFF for the private main-display capture.
+    if(fcSilverFixedBMD1080p30()) {
+        [self.sourceChoice selectItemAtIndex:0];
+        [self sourceChanged:nil];
+        self.deviceDetails.stringValue=@"Intensity Extreme · silver HDMI self-loop";
+        [self startPressed:nil];
+    } else {
+        [self.sourceChoice selectItemAtIndex:1];
+        [self sourceChanged:nil];
+        self.deviceDetails.stringValue=@"Software simulation · no verified HDMI loopback";
+        [self startPressed:nil];
+    }
 }
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication*)sender {
     return YES;
@@ -918,6 +1141,46 @@ static NSButton *fcButton(NSRect frame,NSString *title, id target, SEL action) {
 }
 @end
 
+// Verify actual Sierra vendor 10.4 holds the exact matched output standard
+// while the *native application owns the device*. Never enable video playback,
+// open HDMI input or publish the private desktop in this regression test.
+static int runOriginalOutputModeHoldTest(void) {
+    @autoreleasepool {
+        if(!fcSilverFixedBMD1080p30()) {
+            puts("stage=native_output_mode_hold result=wrong_fixture");
+            return 77;
+        }
+        NSApplication *app=[NSApplication sharedApplication];
+        [app setActivationPolicy:NSApplicationActivationPolicyAccessory];
+        FountainController *controller=[FountainController new];
+        [controller buildWindow];
+        if(![controller openDevice]) {
+            puts("stage=native_output_mode_hold result=device_unavailable");
+            exit(78);
+        }
+        BOOL alive=[controller verifyHeldOriginalOutputStandard];
+        NSDate *until=[NSDate dateWithTimeIntervalSinceNow:3.0];
+        while([until timeIntervalSinceNow]>0) {
+            [[NSRunLoop currentRunLoop]
+                runUntilDate:[NSDate dateWithTimeIntervalSinceNow:.10]];
+        }
+        alive=alive&&[controller verifyHeldOriginalOutputStandard];
+        [controller stopCurrent:NO];
+        [controller closeDevice];
+        controller.window.delegate=nil;
+        [controller.window orderOut:nil];
+        [controller.window close];
+        controller.window=nil;
+        app.delegate=nil;
+        printf("stage=native_output_mode_hold result=%s "
+               "output_mode=1080p30 idle_frame=black "
+               "idle_hold_released=1 preference_write=0 "
+               "capture_started=0 output_playback_started=0 "
+               "monitor_optical_witness=unavailable\n",alive?"PASS":"FAIL");
+        fflush(stdout);
+        exit(alive?0:79);
+    }
+}
 static int runScratchCodecTest(void) {
     @autoreleasepool {
         NSData *rgba=virtualBarsRGBA(1280,720,9);
@@ -1008,16 +1271,14 @@ static int runWindowSelfTest(void) {
             runUntilDate:[NSDate dateWithTimeIntervalSinceNow:.45]];
         BOOL valid=controller.virtualActive && controller.lastFrame!=nil &&
                    controller.stage.notice==nil && !controller.formatChoice.enabled;
-        BOOL guardVerified=YES;
-        if (![[NSUserDefaults standardUserDefaults]
-                    boolForKey:@"FountainVideoAllowLegacyCapture"]) {
-            [controller.sourceChoice selectItemAtIndex:0];
-            [controller sourceChanged:nil];
-            [controller startPressed:nil];
-            guardVerified=controller.virtualActive &&
-                          !controller.captureActive &&
-                          controller.lastFrame!=nil;
-        }
+        [controller.sourceChoice selectItemAtIndex:0];
+        [controller sourceChanged:nil];
+        // Verify the hardware path is deliberately selected, but do not
+        // start any vendor stream during the synthetic-only window test.
+        BOOL guardVerified=controller.virtualActive &&
+                           !controller.captureActive &&
+                           controller.formatChoice.indexOfSelectedItem==7 &&
+                           controller.scratchShareToggle.state==NSControlStateValueOff;
         [controller stopPressed:nil];
         controller.window.delegate=nil;
         [controller.window orderOut:nil];
@@ -1025,7 +1286,7 @@ static int runWindowSelfTest(void) {
         controller.window=nil;
         app.delegate=nil;
         printf("stage=app_window result=%s virtual_frame=%u"
-               " physical_crash_guard=%u\n",
+               " fixed_loopback_explicit_selection=%u\n",
                valid&&guardVerified?"pass":"fail",
                (unsigned)valid,(unsigned)guardVerified);
         /* This CLI test manually pumps a run loop without NSApplication.run.
@@ -1035,6 +1296,140 @@ static int runWindowSelfTest(void) {
          */
         fflush(stdout);
         exit(valid&&guardVerified?0:46);
+    }
+}
+// Explicit native-AppKit acceptance of the user-fixed silver self-loop.
+// No network publication: the source is the silver's primary HDMI display.
+static int runFixedSilverHDMIAppTest(void) {
+    @autoreleasepool {
+        if(!fcSilverFixedBMD1080p30()) {
+            puts("stage=native_fixed_hdmi result=source_preflight_failed");
+            return 67;
+        }
+        NSApplication *app=[NSApplication sharedApplication];
+        [app setActivationPolicy:NSApplicationActivationPolicyAccessory];
+        FountainController *controller=[FountainController new];
+        [controller buildWindow];
+        [controller.sourceChoice selectItemAtIndex:0];
+        [controller sourceChanged:nil];
+        [controller startPressed:nil];
+        NSDate *deadline=[NSDate dateWithTimeIntervalSinceNow:2.2];
+        while([deadline timeIntervalSinceNow]>0 && controller.captureActive) {
+            [[NSRunLoop currentRunLoop]
+                runUntilDate:[NSDate dateWithTimeIntervalSinceNow:.08]];
+        }
+        BOOL preview=controller.captureActive &&
+            controller.lastFrame!=nil && !controller.stage.synthetic &&
+            controller.lastWidth==1920 && controller.lastHeight==1080 &&
+            controller.scratchShareToggle.state==NSControlStateValueOff;
+        [controller stopCurrent:NO];
+        [controller closeDevice];
+        controller.window.delegate=nil;
+        [controller.window orderOut:nil];
+        [controller.window close];
+        controller.window=nil;
+        app.delegate=nil;
+        printf("stage=native_fixed_hdmi result=%s actual_rgba_preview=%u "
+               "dimensions=1920x1080 private=1 "
+               "clean_teardown=1 device_timestamp_called=0\n",
+               preview?"pass":"fail",(unsigned)preview);
+        fflush(stdout);
+        exit(preview?0:68);
+    }
+}
+// Explicit, bounded live-transport acceptance: real silver HDMI -> native AppKit
+// -> authenticated private SSH loopback -> separate Ubuntu Linux Docker scratch.
+// No public LAN listener. Never run this test without operator-owned fixture.
+static int runFixedSilverDockerLiveTest(BOOL localSilverGuest) {
+    @autoreleasepool {
+        if(!fcSilverFixedBMD1080p30()) {
+            puts("stage=native_docker_live result=wrong_physical_fixture");
+            return 70;
+        }
+        const char* rawPath=getenv(localSilverGuest ?
+            "FOUNTAIN_TEST_HDMI_MAILBOX_LOCAL_TOKEN" :
+            "FOUNTAIN_TEST_DOCKER_STAGING_SECRET");
+        if(!rawPath || !*rawPath) {
+            puts("stage=native_docker_live result=missing_private_secret");
+            return 71;
+        }
+        struct stat st;
+        if(stat(rawPath,&st)!=0 || !S_ISREG(st.st_mode) ||
+           (st.st_mode & 0077)!=0) {
+            puts("stage=native_docker_live result=secret_file_not_private");
+            return 72;
+        }
+        NSString* tokenPath=[NSString stringWithUTF8String:rawPath];
+        NSString* contents=[NSString stringWithContentsOfFile:tokenPath
+                                 encoding:NSUTF8StringEncoding error:nil];
+        NSString* token=[contents stringByTrimmingCharactersInSet:
+                         [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        if(token.length<32) {
+            puts("stage=native_docker_live result=invalid_private_secret");
+            return 73;
+        }
+        // Only the loopback port provisioned by our preflight SSH tunnels.
+        NSURL* endpoint=[NSURL URLWithString:localSilverGuest ?
+            @"http://127.0.0.1:8483/api/scratch/ingest" :
+            @"http://127.0.0.1:8473/api/scratch/ingest"];
+        FCScratchPublisher* publisher=[[FCScratchPublisher alloc]
+                                 initWithEndpoint:endpoint token:token];
+        if(!publisher) return 74;
+        NSApplication* app=[NSApplication sharedApplication];
+        [app setActivationPolicy:NSApplicationActivationPolicyAccessory];
+        FountainController* controller=[FountainController new];
+        [controller buildWindow];
+        [controller.sourceChoice selectItemAtIndex:0];
+        [controller sourceChanged:nil];
+        [controller startPressed:nil];
+        if(!controller.captureActive) {
+            puts("stage=native_docker_live result=hardware_lock_failed");
+            [controller stopCurrent:NO]; [controller closeDevice];
+            fflush(stdout); exit(75);
+        }
+        // The physical source is the Mac's main display. Sharing is briefly
+        // enabled ONLY within this explicitly requested isolated test.
+        controller.scratchPublisher=publisher;
+        [controller.scratchShareToggle setState:NSControlStateValueOn];
+        [controller scratchShareChanged:nil];
+        NSDate* deadline=[NSDate dateWithTimeIntervalSinceNow:3.4];
+        while([deadline timeIntervalSinceNow]>0) {
+            [[NSRunLoop currentRunLoop]
+                runUntilDate:[NSDate dateWithTimeIntervalSinceNow:.07]];
+        }
+        [controller.scratchShareToggle setState:NSControlStateValueOff];
+        [controller scratchShareChanged:nil];
+        // Finish pending HTTP callbacks, without sending new frames.
+        deadline=[NSDate dateWithTimeIntervalSinceNow:0.65];
+        while([deadline timeIntervalSinceNow]>0) {
+            [[NSRunLoop currentRunLoop]
+                runUntilDate:[NSDate dateWithTimeIntervalSinceNow:.08]];
+        }
+        const NSUInteger delivered=[publisher delivered];
+        const NSUInteger failed=[publisher failed];
+        const BOOL nativeImage=controller.lastFrame!=nil &&
+            !controller.stage.synthetic && controller.lastWidth==1920 &&
+            controller.lastHeight==1080;
+        [controller stopCurrent:NO];
+        [controller closeDevice];
+        controller.window.delegate=nil;
+        [controller.window orderOut:nil];
+        [controller.window close];
+        controller.window=nil;
+        app.delegate=nil;
+        const BOOL accepted=nativeImage && delivered>=2 &&
+            controller.scratchShareToggle.state==NSControlStateValueOff &&
+            !controller.captureActive;
+        printf("stage=native_docker_live result=%s "
+               "physical_rgba=%u local_mailbox_committed=%lu "
+               "post_failed=%lu main_desktop_share_after_test=OFF "
+               "destination=%s "
+               "clean_capture_release=1 docker_receipt_independently_required=1\n",
+               accepted?"pass":"fail",(unsigned)nativeImage,
+               (unsigned long)delivered,(unsigned long)failed,
+               localSilverGuest?"silver_virtio_block":"ubuntu_ssh_tunnel");
+        fflush(stdout);
+        exit(accepted?0:76);
     }
 }
 static int runAutoScanSelfTest(void) {
@@ -1117,6 +1512,14 @@ int main(int argc,char **argv) {
         return runScratchCodecTest();
     if (argc==2 && !strcmp(argv[1],"--self-test-window"))
         return runWindowSelfTest();
+    if (argc==2 && !strcmp(argv[1],"--self-test-fixed-silver-hdmi"))
+        return runFixedSilverHDMIAppTest();
+    if (argc==2 && !strcmp(argv[1],"--self-test-original-hdmi-output-idle"))
+        return runOriginalOutputModeHoldTest();
+    if (argc==2 && !strcmp(argv[1],"--self-test-fixed-silver-hdmi-live-docker"))
+        return runFixedSilverDockerLiveTest(NO);
+    if (argc==2 && !strcmp(argv[1],"--self-test-fixed-silver-hdmi-live-local-docker"))
+        return runFixedSilverDockerLiveTest(YES);
     if (argc==2 && !strcmp(argv[1],"--self-test-autoscan"))
         return runAutoScanSelfTest();
     if (argc==2 && !strcmp(argv[1],"--self-test-movie"))

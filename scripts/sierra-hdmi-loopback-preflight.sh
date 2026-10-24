@@ -3,8 +3,9 @@
 #
 # Proves: BMD EDID/sink negotiation, actual OS framebuffer reference,
 # source-owned callback ABI conformance (including real Sierra toolchain).
-# It intentionally NEVER starts vendor capture while Desktop Video 10.4's
-# video-frame destructor crash is unresolved.
+# It intentionally NEVER starts vendor capture. Physical input capture for
+# the final Mac HDMI OUT -> Intensity HDMI IN rig has since been ACCEPTED via
+# native app after removing the unsafe legacy vendor timestamp accessor.
 #
 # Usage: sh scripts/sierra-hdmi-loopback-preflight.sh
 # No screen content is persisted/transmitted; binaries are built in /tmp only.
@@ -60,5 +61,5 @@ if [ "$found" -ne 1 ]; then
 fi
 
 echo "stage=capture_crash_evidence result=present vendor_frame_release=invalid"
-echo "stage=physical_capture result=NOT_ACCEPTED signal_lock=unverified real_frame=not_witnessed"
+echo "stage=physical_capture result=NOT_TESTED_BY_THIS_READONLY_PREFLIGHT accepted_in_separate_witness=1 evidence=tests/2026-10-24-fixed-silver-hdmi-physical-capture-and-native-app-accepted.md"
 echo "stage=hdmi_preflight result=pass edid=1 edid_caps=1 framebuffer=1 callback_mock=1 crash_evidence=1 vendor_capture_calls=0 driver_modifications=0"

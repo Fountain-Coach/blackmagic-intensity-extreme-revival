@@ -1,63 +1,48 @@
 #!/bin/sh
-# Source-owned bounded physical HDMI witness. Run on the source Mac.
-# A BMD HDMI endpoint and exact supported source mode are mandatory.
-# Video is never stored; only bounded callback, status and timing evidence.
+# Physical acceptance contract for the ONE FINAL user-owned topology:
+# silver Macmini5,3 HDMI OUT -> ORIGINAL Intensity Extreme HDMI IN -> same
+# Macmini5,3 running macOS Sierra 10.12.6 via Thunderbolt 1/Comdis dock.
+#
+# DO NOT substitute an external camera, another Mac, an HDMI generator, or
+# the old Nikon scan. DO NOT re-run the crashing GetStreamTime observer.
+#
+# Default --check is read-only and does NOT stop a running GUI capture.
+# --run explicitly starts the native AppKit self-test ONLY if the GUI is idle.
+# Proprietary driver 10.4 and firmware are never modified.
 set -eu
-mode="${1:-1080p30}"
-case "$mode" in
-  1080p25|1080p30|720p60) ;;
-  *) echo "usage: $0 [1080p25|1080p30|720p60]" >&2; exit 64 ;;
+operation="${1:---check}"
+case "$operation" in
+  --check|--run) ;;
+  *) echo "usage: $0 [--check|--run]" >&2; exit 64 ;;
 esac
-
-here=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
 target="bene@Uwes-Mac-mini.local"
-source_file="$here/src/decklink-input-observer.cpp"
-[ -r "$source_file" ] || { echo "stage=runner result=missing_source"; exit 20; }
-command -v python3 >/dev/null || { echo "stage=runner result=missing_python3"; exit 21; }
-
-echo "stage=runner phase=source_preflight mode=$mode"
-if python3 "$here/scripts/hdmi-source-preflight.py" --mode "$mode"; then
-  :
-else
-  status=$?
-  echo "stage=runner result=blocked_by_source_preflight status=$status"
-  exit "$status"
+echo "stage=fixed_fixture silver_hdmi_out=1 original_intensity_hdmi_in=1"
+echo "stage=hardware_claim current_driver=10.4 host=Sierra_10.12.6 alternate_sources=forbidden"
+if [ "$operation" = "--check" ]; then
+  ssh -o BatchMode=yes -o ConnectTimeout=5 "$target" \
+    'set -eu
+     test "$(sw_vers -productVersion)" = "10.12.6"
+     test "$(sysctl -n hw.model)" = "Macmini5,3"
+     kextstat | grep -F "com.blackmagic-design.desktopvideo.iokit.driver (10.4)" >/dev/null
+     system_profiler SPDisplaysDataType | grep -A2 "BMD HDMI:" | grep -F "1920 x 1080 @ 30 Hz" >/dev/null
+     test -x "/Users/bene/Applications/Fountain Video.app/Contents/MacOS/FountainVideo"
+     echo "stage=fixed_hdmi_source result=ready mode=1080p30"
+     if pgrep -f "^/Users/bene/Applications/Fountain Video.app/Contents/MacOS/FountainVideo$" >/dev/null; then
+       echo "stage=native_capture_app result=running"
+     else
+       echo "stage=native_capture_app result=not_running"
+     fi
+     echo "stage=physical_capture result=not_tested_in_readonly_check see=tests/2026-10-24-fixed-silver-hdmi-physical-capture-and-native-app-accepted.md"'
+  exit
 fi
-
-# EDID recognition is not proof of signal or HDCP-free capture.
-remote_dir=""
-cleanup() {
-  if [ -n "$remote_dir" ]; then
-    ssh -o BatchMode=yes -o ConnectTimeout=5 "$target" \
-      "rm -rf '$remote_dir'" >/dev/null 2>&1 || :
-  fi
-}
-trap cleanup 0
-trap 'exit 130' 2
-trap 'exit 143' 15
-
-remote_dir=$(ssh -o BatchMode=yes -o ConnectTimeout=5 "$target" \
-  'mktemp -d /tmp/fc-intensity-capture.XXXXXX')
-case "$remote_dir" in
-  /tmp/fc-intensity-capture.*) ;;
-  *) echo "stage=runner result=invalid_remote_temp" >&2; exit 22 ;;
-esac
-printf '%s\n' "$remote_dir" |
-  grep -Eq '^/tmp/fc-intensity-capture\.[A-Za-z0-9]{6}$' ||
-  { echo "stage=runner result=unsafe_remote_temp" >&2; exit 22; }
-
-scp -q "$source_file" "$target:$remote_dir/observer.cpp"
-echo "stage=runner phase=bounded_capture mode=$mode"
-if captured=$(ssh -o BatchMode=yes -o ConnectTimeout=5 "$target" \
-    "clang++ -std=c++11 -Wall -Wextra -Werror -Wno-unused-parameter '$remote_dir/observer.cpp' -framework CoreFoundation -o '$remote_dir/observer' && '$remote_dir/observer' '--observe-$mode'"); then
-  printf '%s\n' "$captured"
-else
-  status=$?
-  printf '%s\n' "$captured"
-  echo "stage=runner result=observer_failed status=$status" >&2
-  exit 23
-fi
-
-# Require physical receiver lock, pixel buffer, frame timestamp and teardown.
-printf '%s\n' "$captured" |
-  python3 "$here/scripts/validate-capture-evidence.py" --mode "$mode"
+ssh -o BatchMode=yes -o ConnectTimeout=5 "$target" \
+  'set -eu
+   test "$(sw_vers -productVersion)" = "10.12.6"
+   test "$(sysctl -n hw.model)" = "Macmini5,3"
+   kextstat | grep -F "com.blackmagic-design.desktopvideo.iokit.driver (10.4)" >/dev/null
+   system_profiler SPDisplaysDataType | grep -A2 "BMD HDMI:" | grep -F "1920 x 1080 @ 30 Hz" >/dev/null
+   if pgrep -f "^/Users/bene/Applications/Fountain Video.app/Contents/MacOS/FountainVideo$" >/dev/null; then
+     echo "stage=fixed_native_capture result=client_already_running no_concurrent_vendor_access=1" >&2
+     exit 40
+   fi
+   exec "/Users/bene/Applications/Fountain Video.app/Contents/MacOS/FountainVideo" --self-test-fixed-silver-hdmi'
