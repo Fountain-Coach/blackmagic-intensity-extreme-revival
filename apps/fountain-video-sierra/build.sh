@@ -21,7 +21,7 @@ plutil -lint "$output/Contents/Info.plist"
 clang++ -std=c++11 -x objective-c++ -fobjc-arc -fblocks \
   -arch x86_64 -mmacosx-version-min=10.12 \
   -Wall -Wextra -Werror -Wno-unused-parameter \
-  "$folder/FountainVideo.mm" \
+  "$folder/FountainVideo.mm" "$folder/FCScratchPublisher.mm" \
   -framework Cocoa -framework CoreFoundation -framework CoreGraphics \
   -framework AVFoundation -framework CoreMedia -framework CoreVideo \
   -o "$output/Contents/MacOS/FountainVideo"
