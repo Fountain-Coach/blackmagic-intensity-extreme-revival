@@ -95,6 +95,14 @@ In a separate, deliberately bounded live vendor baseline, the improved [capture 
 
 Our independent [A124 register contract](src/intensity-register-contract.c) combines the model-specific firmware/version and video-status gates with an injectable read-only register callback. **Twelve mocked BAR0 contract tests passed on both Sierra and Ubuntu.** It has not been bound to physical PCI memory, and no independent capture driver has been loaded. The operating hardware still requires a verified recovery boot and an actual compatible unprotected input signal. See [complete 24 October test evidence](tests/2026-10-24-hdmi-source-gated-capture-and-read-contract.md) and [D4 physical acceptance](https://github.com/Fountain-Coach/blackmagic-intensity-extreme-revival/issues/8).
 
+## HDMI streaming and browser scratching
+
+The [browser scratch instrument](docs/hdmi-to-browser-stream-and-scratch.md) now receives **real transported JPEG frames** from the native Sierra Fountain Video.app over the private LAN, retains up to 144 indexed frames, and supports drag-to-jog, reverse and forward shuttle, freeze, frame stepping, and return to live. A separate [full software lab](docs/full-software-video-laboratory.md) remains available.
+
+**[Open Browser Scratch](http://192.168.8.50:8273/scratch)** (private WLAN).
+
+The native source and transport are shared between synthetic video and the optional actual DeckLink callback. **The tested ingress is SYNTHETIC; no physical HDMI frame was captured.** The browser visibly labels the provenance and never claims hardware revival. The scratch implementation transmits a bounded 640×360 JPEG preview stream rather than full-frame-rate WebRTC or uncompressed HDMI. Tests passed on both Ubuntu and macOS, including eight real Chrome drag/keyboard/transport interactions. The original drivers remain untouched.
+
 ## Fountain Video — native Sierra application (24 October 2026)
 
 **Fountain Video.app has been built and launched on the real 2011 Intel Mac mini.** This is a native AppKit application, rather than another Python-only video simulation or command-line diagnostic. It is installed in the Sierra account's personal Applications folder and communicates directly with the existing Desktop Video 10.4 runtime, bypassing the isolated crash-prone CoreMediaIO plug-in.
