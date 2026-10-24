@@ -193,6 +193,7 @@ class VideoInstrumentLab:
         self.drop_every = 3 if scenario == "drops" else 0
         self.mute_audio = False
         self.output_auto_fill = True
+        self.output_present = False
         self.captured.clear()
         self.emitted.clear()
         self.schedule.clear()
@@ -350,6 +351,8 @@ class VideoInstrumentLab:
                     self.transmitter.dropped += 1
                     self.transmitter.frame_number += 1
                     self.total_output_lost += 1
+                    self.output_present = False
+                    self.last_crc_equal = None
                     self._event("output_underflow")
                 else:
                     produced = self.transmitter.advance(1)
@@ -364,6 +367,7 @@ class VideoInstrumentLab:
                                                          "playback")
                     self.emitted.append(output_packet)
                     self.total_emitted += 1
+                    self.output_present = True
             if self.receiver.streaming:
                 active, source_mode, protected = self._active_source()
                 if self.scenario == "loopback" and output_packet is None:
@@ -431,6 +435,7 @@ class VideoInstrumentLab:
     def stop(self) -> dict:
         self.receiver.stop()
         self.transmitter.stop()
+        self.output_present = False
         self._event("stop")
         return self.snapshot()
 
@@ -464,7 +469,8 @@ class VideoInstrumentLab:
             "output": {"activity": tx["activity"], "mode": tx["mode"],
                        "streaming": tx["streaming"], "delivered": tx["frames_delivered"],
                        "dropped": tx["frames_dropped"], "queue_depth": len(self.schedule),
-                       "last_frame": tx["last_frame"]},
+                       "signal_present": self.output_present and tx["streaming"],
+                       "last_frame": tx["last_frame"] if self.output_present else None},
             "loopback": {"link": "virtual-memory-not-hdmi",
                          "last_video_audio_pts_identical": self.last_crc_equal},
             "archive": {"retained_capture_frames": len(self.captured),
@@ -503,7 +509,8 @@ class VideoInstrumentLab:
                       self.receiver.mode is not None and self.receiver.mode.name == mode)
             return self.captured[-1] if self.captured and usable else None
         if direction == "output":
-            return self.emitted[-1] if self.emitted else None
+            return (self.emitted[-1] if self.emitted and
+                    self.output_present and self.transmitter.streaming else None)
         raise DeviceError("BAD_DIRECTION", "Use input or output")
 
     def archive_zip(self) -> bytes:
