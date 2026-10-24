@@ -47,9 +47,11 @@ Live software lab acceptance command:
 
     python3 scripts/accept-software-video-lab.py --url http://192.168.8.50:8272
 
-Expected output after version supporting output-underflow scenario:
+**Observed on the Ubuntu host and independently from the modern Mac as an HTTP client** (both commands exited 0):
 
     stage=full_software_lab result=pass scenarios=8 hardware_access=0 real_camera_required=0
+
+After each run the service restored a working dual virtual loopback with two emitted and two received frames, identical media checksums and no physical device access. The downloadable ZIP was fetched from the Mac over the trusted WLAN and verified to be a valid archive.
 
 Native macOS Sierra source build and synthetic tests:
 
