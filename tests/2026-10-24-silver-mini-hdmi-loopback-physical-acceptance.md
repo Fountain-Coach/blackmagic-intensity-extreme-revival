@@ -100,3 +100,24 @@ Do not add this unstable path to the automatic video simulator acceptance suite.
 A future physical acceptance witness must establish a lock, receive one or more actual non-no-source frames, extract valid pixel bytes and timestamps, and demonstrate a safe stream shutdown without process crash. Then inspect Browser Scratch for the new non-synthetic source label while maintaining separate source provenance.
 
 Source-owned inventory tool: [sierra-hdmi-loopback-readonly.sh](../scripts/sierra-hdmi-loopback-readonly.sh). Existing manual capture source: [decklink-input-observer.cpp](../src/decklink-input-observer.cpp). Physical task: issue #8.
+
+## 24 October follow-up: idle, read-only status query
+
+A new source-owned `src/decklink-signal-status-readonly.cpp` was compiled and run on the actual Sierra 10.12.6 host **without enabling video input or starting streams**. It only enumerates the original DeckLink device and reads IDeckLinkStatus:
+
+    stage=readonly_status status_interface=0x00000000 present=1
+    stage=readonly_input_signal result=observed queried_without_streams=1 lock_query_rc=0x80000008 locked=0 mode_query_rc=0x80000001 mode=0x0 real_frame_verified=0
+    stage=safety vendor_input_enable=0 start_streams=0 framebuffer_read=0 vendor_driver_changes=0 pci_mmio=0 firmware_update=0
+
+The status interface exists; **the idle lock query returned an error** (`0x80000008`) rather than a trustworthy positive or negative lock measurement. An uninitialized boolean printed as zero is *not* a verified unlocked receiver. The detected-mode query also failed. Do **not** treat this as new physical-capture failure evidence or re-enter the crashing stream solely to populate this field. The prior active-stream attempt remains the last hazardous real-input test; capture is NOT ACCEPTED.
+
+## Original Intensity Extreme source-encoding gate (24 October)
+
+Model-specific product specifications for the *original* Blackmagic **Intensity Extreme** BINTSTBEXT report HDMI sampling **4:2:2** and color space **YUV 4:2:2**, with support for 1080p30. Do not substitute current Intensity Pro 4K or UltraStudio HDMI-RGB capabilities for this legacy model. Sources:
+
+- https://www.bhphotovideo.com/c/product/824118-REG/Blackmagic_Design_BINTSTBEXT_Intensity_Extreme_HDMI_and.html
+- https://www.expandore.com/blackmagic/blackmagic-intensity-extreme.htm
+
+**Crucial unmeasured property:** The *actual HDMI wire encoding* emitted by the silver Mac at its BMD HDMI 1920x1080@30 display is **not verified**. CoreGraphics ARGB8888 describes a framebuffer, **not** the outbound HDMI 4:4:4 RGB/4:2:2 YUV InfoFrame. The BMD EDID advertising YCbCr 422 does not prove that macOS selected it. Thus an unsupported RGB output is a *candidate explanation* for the receiver's lack of lock, **not a proven cause**, and a driver reinstall would not necessarily fix it.
+
+**Next decisive non-destructive physical acceptance:** Supply a known unprotected HDMI generator/camera with independently verified **YUV 4:2:2** at an exact supported mode (e.g. 1080p30 or 720p60), preferably checked on a working display, into the original Intensity Extreme's **HDMI IN**. Do not change the Mac's primary display, plug into the card's HDMI OUT, or evade HDCP. Only then attempt a bounded capture in a recoverable driver environment, witnessing input lock and genuine distinct pixels, timestamps and safe release. The source alone cannot be replugged by software or authenticated by EDID.

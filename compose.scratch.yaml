@@ -1,0 +1,39 @@
+# Source-neutral Linux Docker video ingress, not a Blackmagic PCI driver.
+# Bind to loopback by default; never expose viewers publicly.
+name: fountain-video-scratch
+services:
+  scratch:
+    build:
+      context: .
+      dockerfile: docker/scratch.Dockerfile
+    restart: unless-stopped
+    init: true
+    user: "1000:1000"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    mem_limit: 256m
+    environment:
+      FOUNTAIN_SCRATCH_INGEST_TOKEN_FILE: /run/secrets/fountain_scratch_token
+    secrets:
+      - source: scratch_token
+        target: fountain_scratch_token
+    ports:
+      - "${FOUNTAIN_SCRATCH_BIND_IP:-127.0.0.1}:${FOUNTAIN_SCRATCH_PORT:-8373}:8273"
+    healthcheck:
+      test:
+        - CMD
+        - python3
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8273/api/scratch/state', timeout=2).close()"
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+secrets:
+  scratch_token:
+    file: "${FOUNTAIN_SCRATCH_TOKEN_FILE:?Set FOUNTAIN_SCRATCH_TOKEN_FILE to an existing private token file of at least 32 characters}"
