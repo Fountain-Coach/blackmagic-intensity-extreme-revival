@@ -38,7 +38,12 @@ if pgrep -x xhyve >/dev/null 2>&1; then
   echo "stage=hdmi_mailbox_guest result=guest_already_running NO_DUPLICATE" >&2; exit 28
 fi
 echo "stage=hdmi_mailbox_guest result=starting slot4=existing_guest_ext4 slot5=private_hdmi_mailbox_readonly vmnet=none"
-echo "Login root; disable ttyS1 getty; mount /dev/vda; start Docker. /dev/vdb is RAW and MUST NEVER be mounted as a filesystem."
+echo "Login root; disable ttyS1 getty; mount only /dev/vda for Docker. /dev/vdb is RAW: NEVER mount it as a filesystem."
+echo "MANDATORY after every guest boot, BEFORE launching the HDMI reader:"
+echo "  blockdev --setro /dev/vdb"
+echo "  test \"\$(blockdev --getro /dev/vdb)\" = 1  # mandatory check"
+echo "  blockdev --getro /dev/vdb  # must report 1; fail CLOSED otherwise"
+echo "The xhyve host-side read-only option alone is insufficient: Alpine first observed getro=0."
 exec "$ROOT/xhyve" -A -c 2 -m 2G \
   -s 0:0,hostbridge \
   -s "3,ahci-cd,$ROOT/alpine-virt-3.24.3-x86_64.iso" \
