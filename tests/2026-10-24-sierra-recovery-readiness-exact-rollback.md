@@ -58,7 +58,7 @@ The Apple Support link uses the HTTP-only updates-http hostname. The equivalent 
 Private copy on Ubuntu (never committed to Git):
 /home/benedikt/fountain-blackmagic-re/vendor-offline-2026-10-24/apple-recovery/InstallOS_Sierra_10.12_Apple.dmg
 
-A second temporary copy was transferred to Sierra solely to check its integrity and embedded Apple installer package signature. No OS installer has been executed. This copy is to be removed after verification; the Ubuntu archive is canonical.
+A second temporary copy was transferred to Sierra solely for verification. The silver Mac independently computed the **exact same SHA-256** as Ubuntu, mounted the disk image **read-only**, and inspected InstallOS.pkg. Apple's own pkgutil --check-signature returned **Status: signed Apple Software**, with certificate chain **Software Update → Apple Software Update Certification Authority → Apple Root CA**. The package contains InstallOS.pkg/InstallESD.dmg. The installer was **NOT executed**. The temporary 5 GB image was then detached and deleted, restoring the original ~60 GiB available on Data. The Ubuntu archive remains canonical.
 
 Apple media instructions:
 https://support.apple.com/en-us/101578
@@ -124,3 +124,5 @@ Its installer removes/replaces KEXTs and DeckLinkAPI, installs updater-related s
 6. Only then conduct bounded HDMI 1080p30 input lock, physical pixel/timestamp acquisition, crash-free shutdown and non-synthetic browser source acceptance.
 
 **No unattended boot, driver installation, firmware update, destructive USB operation, or physical capture attempt was performed during this stage.**
+
+**Final post-cleanup witness:** disk0s3 Recovery HD was unmounted again; temporary Apple image disk2 ejected; startup remains /dev/disk0s2; original Blackmagic driver 10.4 still loaded; Fountain Video still streams online SYNTHETIC browser frames, hardware HDMI acceptance false; disk0s2 free space returned to 60 GiB; Fresh remained unchanged. Apple root certificate verification was performed with the original pkgutil on Sierra.
