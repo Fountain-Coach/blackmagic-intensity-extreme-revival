@@ -216,8 +216,8 @@ function render(state,force=false) {
  $('tick').textContent=state.tick;
  $('rx-state').textContent=state.input.signal_locked?'Virtual lock ON':state.input.activity==='idle'?'Idle':'No source / wrong mode';
  $('rx-state').className=state.input.signal_locked?'state-yes':'state-no';
- $('tx-state').textContent=state.output.streaming?'Virtual output active':'No output';
- $('tx-state').className=state.output.streaming?'state-yes':'state-idle';
+ $('tx-state').textContent=!state.output.streaming?'No output':state.output.signal_present?'Virtual output active':'Underrun · no output frame';
+ $('tx-state').className=state.output.signal_present?'state-yes':state.output.streaming?'state-no':'state-idle';
  $('producer').textContent=state.source.type==='virtual-playback'?'Virtual playback':'Virtual camera';
  $('receiver').textContent=state.input.activity==='idle'?'Output monitor':'Virtual capture';
  $('route-medium').textContent='Virtual '+state.source.connector;
@@ -233,6 +233,9 @@ function render(state,force=false) {
  // Keep controls synchronized with server state on full configure/reload,
  // but do not overwrite in-progress changes after every animation tick.
  $('archive').disabled=state.archive.retained_capture_frames===0;
+ const camera=state.source.type==='virtual-camera';
+ $('power').disabled=!camera; $('live-view').disabled=!camera;
+ $('source-mode').disabled=!camera;
 }
 async function action(fn, message) {
  if(busy)return;
