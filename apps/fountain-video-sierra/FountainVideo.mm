@@ -135,9 +135,23 @@ static NSData *virtualBarsRGBA(NSUInteger width, NSUInteger height, uint32_t seq
             uint8_t *pixel = out + (y*width+x)*4;
             pixel[0]=bars[idx][0]; pixel[1]=bars[idx][1];
             pixel[2]=bars[idx][2]; pixel[3]=255;
-            if (y<9 && x>=((sequence%30)*width/30) &&
-                x<((sequence%30)*width/30)+10) {
-                pixel[0]=pixel[1]=pixel[2]=120;
+            // Moving high-contrast target: browser jogging becomes visually
+            // measurable, unlike an almost unchanging color-bar picture.
+            const NSUInteger side=MAX(16,MIN(width,height)/9);
+            const NSUInteger pos=(sequence*23u) % (width-side);
+            const NSUInteger top=height/2-side/2;
+            if (x>=pos && x<pos+side && y>=top && y<top+side) {
+                const NSUInteger dx=x-pos,dy=y-top;
+                const BOOL edge=dx<5 || dy<5 || dx>=side-5 || dy>=side-5;
+                pixel[0]=pixel[1]=pixel[2]=edge?242:16;
+            }
+            // Sixteen blocks encode the frame number as a visible binary
+            // signature. Each frame's content is distinguishable when frozen.
+            if (y>=height-44 && y<height-12 && x>=20 && x<20+16*14) {
+                const NSUInteger bit=(x-20)/14;
+                const BOOL gap=((x-20)%14)<2;
+                const BOOL one=(sequence >> (15-bit)) & 1u;
+                pixel[0]=pixel[1]=pixel[2]=gap?20:(one?238:65);
             }
         }
     }
@@ -895,6 +909,11 @@ static NSButton *fcButton(NSRect frame,NSString *title, id target, SEL action) {
 static int runScratchCodecTest(void) {
     @autoreleasepool {
         NSData *rgba=virtualBarsRGBA(1280,720,9);
+        NSData *other=virtualBarsRGBA(1280,720,10);
+        if ([rgba isEqualToData:other]) {
+            puts("stage=scratch_jpeg result=fail reason=static_test_pattern");
+            return 50;
+        }
         NSImage *image=imageFromRGBA(rgba,1280,720);
         NSUInteger width=0,height=0;
         NSData *jpeg=[FCScratchPublisher jpegPreviewForImage:image
