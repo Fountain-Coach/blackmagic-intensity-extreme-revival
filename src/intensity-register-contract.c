@@ -5,7 +5,10 @@ FCReadContractResult fc_evaluate_a124_read_contract(
     FCFirmwareGateContext firmware_gates,
     FCInputStatusGates input_gates)
 {
-    FCReadContractResult r = {0};
+    FCReadContractResult r = {
+        FC_READ_CONTRACT_INVALID, FC_FIRMWARE_INIT_GUARDS_CLOSED,
+        {FC_INPUT_GATES_CLOSED, 0, 0, 0}, 0, 0, 0
+    };
     r.state = FC_READ_CONTRACT_INVALID;
     if (!read32)
         return r;
