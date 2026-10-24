@@ -48,14 +48,14 @@ class SerialSender(object):
             self.fid = self.fid % 999999999999 + 1
             frame_header = header(self.fid, pts, width, height, data, stream)
             fid = str(self.fid).encode("ascii")
-            send_line(self.fd, frame_header)
+            send_line(self.fd, frame_header, pace_seconds=0.004)
             self.expect(b"H " + fid)
             for index, chunk in enumerate(chunks(data)):
                 idx = str(index).encode("ascii")
                 line = b"C " + fid + b" " + idx + b" " + (
                     base64.b64encode(chunk) + b":" + crc32hex(chunk))
                 for attempt in range(4):
-                    send_line(self.fd, line)
+                    send_line(self.fd, line, pace_seconds=0.004)
                     received = read_line(self.fd, self.pending)
                     if received == b"A " + fid + b" " + idx:
                         break
@@ -63,7 +63,7 @@ class SerialSender(object):
                         raise WireError("invalid chunk acknowledgement")
                 else:
                     raise WireError("chunk rejected")
-            send_line(self.fd, b"E " + fid)
+            send_line(self.fd, b"E " + fid, pace_seconds=0.004)
             response = read_line(self.fd, self.pending, timeout=10)
             prefix = b"D " + fid + b" "
             if not response.startswith(prefix):
