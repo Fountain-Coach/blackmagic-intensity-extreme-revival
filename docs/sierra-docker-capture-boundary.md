@@ -28,7 +28,7 @@ docker compose -f compose.scratch.yaml ps
 
 To accept the Sierra sender across a private LAN, explicitly set FOUNTAIN_SCRATCH_BIND_IP to the Linux VM's real trusted-LAN address (prefer a bridged VM interface), and set its existing POST target to http://<guest-private-IP>:8373/api/scratch/ingest. The same token must be configured on sender and receiver. No exposed public port or untrusted-Wi-Fi transport: this prototype uses plaintext HTTP and does not authenticate viewers. Add TLS and viewer authorization before sensitive or external use.
 
-A VM disk may eventually be stored as an ordinary file on silver's Fresh drive (after inspecting existing files), but this document DOES NOT authorize any VM installation or storage modification. Sierra remains the boot operating system.
+**Update (24 October 2026):** A source-built xhyve virtualizer booted Alpine Linux 3.24.3 and Linux Docker Engine 29.9.2 on the silver Mac. On Fresh, new `/Volumes/Fresh/FountainVideoDockerLab/docker-guest.raw` is an isolated 12 GiB guest-only ext4 virtual disk; Sierra still boots from Data. The Docker persistent store survived a Linux guest reboot. A `hello-world` container succeeded, and the actual Fountain Video browser-scratch image started and passed 18 receiver tests. Sierra vmnet rejected an unsigned guest; an ad-hoc signed executable was rejected by runtime code-signature enforcement. No root service, network entitlement workaround or physical capture was performed. The guest is **offline** until a legitimate network arrangement is established. [Full witness](../tests/2026-10-24-silver-sierra-docker-runtime.md) · [read-only-by-default launcher](../scripts/silver-video-docker-guest.sh).
 
 ## Acceptance gates
 
