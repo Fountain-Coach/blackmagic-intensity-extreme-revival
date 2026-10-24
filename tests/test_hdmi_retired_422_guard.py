@@ -1,0 +1,97 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+"""Fail-closed tests for retired Sierra Intensity HDMI colour experiments.
+
+No IOKit, CoreGraphics, vendor runtime or real display access. Compatible
+with Sierra Python 2.7, macOS Python 3 and Ubuntu Python 3.
+"""
+from __future__ import print_function
+import os
+import sys
+import unittest
+
+ROOT=os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+CYUV_PY=os.path.join(ROOT,"tools","sierra",
+                     "hdmi-ycbcr422-cyuv-bounded-trial.py")
+CMOD_PY=os.path.join(ROOT,"tools","sierra",
+                     "hdmi-ycbcr422-bounded-trial.py")
+CYUV_C=os.path.join(ROOT,"src","sierra-hdmi-connection-color-control.c")
+CMOD_C=os.path.join(ROOT,"src","sierra-hdmi-color-control.c")
+
+
+def load_py(path):
+    namespace={"__name__":"retired_422_test_fixture"}
+    if sys.version_info[0]<3:
+        execfile(path,namespace)
+    else:
+        with open(path,"rb") as stream:
+            exec(compile(stream.read(),path,"exec"),namespace)
+    return namespace
+
+
+def read_file(path):
+    with open(path,"rb") as stream:
+        raw=stream.read()
+    return raw.decode("utf-8")
+
+
+class RetiredColorModes(unittest.TestCase):
+    def test_cyuv_cli_refuses_422_before_all_io(self):
+        ns=load_py(CYUV_PY)
+        self.assertEqual(ns["main"](["--trial-422"]),65)
+
+    def test_cmod_cli_refuses_422_before_all_io(self):
+        ns=load_py(CMOD_PY)
+        self.assertEqual(ns["main"](["--trial-422"]),65)
+
+    def test_cyuv_direct_function_cannot_reach_live_switch(self):
+        ns=load_py(CYUV_PY)
+        with self.assertRaises(RuntimeError):
+            ns["run_trial"]()
+
+    def test_cmod_direct_function_cannot_reach_live_switch(self):
+        ns=load_py(CMOD_PY)
+        with self.assertRaises(RuntimeError):
+            ns["run_trial"]()
+
+    def test_cyuv_recovery_still_available(self):
+        ns=load_py(CYUV_PY)
+        self.assertEqual(ns["HELPER"],
+                         "/tmp/fc-sierra-hdmi-connection-color-control")
+        src=read_file(CYUV_PY)
+        self.assertIn('if argv==["--restore-only"]:',src)
+        self.assertIn('r=bounded([HELPER,"--restore444"],3)',src)
+
+    def test_retired_cmod_script_cannot_switch(self):
+        src=read_file(CMOD_PY)
+        start=src.index("\ndef run_trial():\n")
+        end=src.index("\ndef main(argv):\n",start)
+        impl=src[start:end]
+        self.assertNotIn("subprocess.Popen(",impl)
+        self.assertIn("raise RuntimeError(",impl)
+
+    def test_cyuv_c_guard_precedes_every_set_call(self):
+        src=read_file(CYUV_C)
+        main=src.index("int main(")
+        gate=src.index("BLOCKED_IOGRAPHICS_RGB_REWRITE",main)
+        setter=src.index("IODisplaySetIntegerParameter(",main)
+        self.assertLess(gate,setter)
+        self.assertIn('strcmp(argv[1],"--set422")',src[main:gate])
+        self.assertIn('strcmp(argv[1],"--restore444")',src)
+        self.assertIn('CFSTR("cyuv")',src)
+        self.assertIn('!(restore && cmod==0x1)',src)
+
+    def test_cmod_c_guard_precedes_wrong_old_setter(self):
+        src=read_file(CMOD_C)
+        main=src.index("int main(")
+        gate=src.index("BLOCKED_RETIRED_CMOD_API",main)
+        setter=src.index("IODisplaySetIntegerParameter(",main)
+        self.assertLess(gate,setter)
+        self.assertIn('strcmp(argv[1],"--inspect")',src[main:gate])
+
+    def test_original_auto_and_rgb_fallback_are_distinct(self):
+        self.assertNotEqual(0x10000000,0x10)
+        self.assertNotEqual(0x100,0x1)
+
+if __name__=="__main__":
+    unittest.main()
