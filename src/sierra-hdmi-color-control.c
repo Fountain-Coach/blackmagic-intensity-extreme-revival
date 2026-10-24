@@ -117,7 +117,11 @@ int main(int argc,char**argv) {
         puts("stage=color_control result=NO_READABLE_BMD_DISPLAY");
         if(bmd)IOObjectRelease(bmd);return 21;
     }
-    io_service_t chosen=quartz_valid?quartz:bmd;
+    // Prefer the exact AppleDisplay service for writes; the first physical
+    // colour write against the CGDisplay-derived service returned
+    // kIOReturnError without changing the mode.
+    io_service_t chosen=(write && registry_valid)?bmd:
+                        (quartz_valid?quartz:bmd);
     uint32_t current=quartz_valid?quartz_value:reg_value,supported=0;
     if(!capabilities(chosen,&supported)){
         if(bmd)IOObjectRelease(bmd);return 22;
@@ -167,8 +171,17 @@ int main(int argc,char**argv) {
            " commit_parameters=0\n",current,target);
     fflush(stdout);
     IOReturn rc=IODisplaySetIntegerParameter(chosen,0,CFSTR("cmod"),(SInt32)target);
-    printf("stage=color_write rc=0x%08x\n",(unsigned)rc);
+    printf("stage=color_write path=%s rc=0x%08x\n",
+           chosen==bmd?"AppleDisplay":"CGDisplay",(unsigned)rc);
     fflush(stdout);
+    if(rc!=0 && quartz_valid && chosen!=quartz){
+        IOReturn alternative=IODisplaySetIntegerParameter(
+            quartz,0,CFSTR("cmod"),(SInt32)target);
+        printf("stage=color_write fallback_path=CGDisplay rc=0x%08x\n",
+               (unsigned)alternative);
+        fflush(stdout);
+        rc=alternative;
+    }
     usleep(350000);
     uint32_t finalval=0;
     int verified=selected(chosen,&finalval,"post_write");
