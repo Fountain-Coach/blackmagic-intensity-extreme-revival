@@ -14,6 +14,10 @@ typedef int32_t(*QI)(void*,CFUUIDBytes,void**);
 typedef int32_t(*GetInt)(void*,uint32_t,int64_t*);
 typedef int32_t(*GetFlag)(void*,uint32_t,bool*);
 typedef uint32_t(*Release)(void*);
+static const uint8_t oldAttributesIID[16]={
+    0xab,0xc1,0x18,0x43,0xd9,0x66,0x44,0xcb,
+    0x96,0xe2,0xa1,0xcb,0x5d,0x31,0x35,0xc4
+};
 static const uint8_t oldConfigIID[16]={
    0x1e,0x69,0xfc,0xf6,0x42,0x03,0x49,0x36,
    0x80,0x76,0x2a,0x9f,0x4c,0xfd,0x50,0xcb
@@ -61,6 +65,29 @@ int main(int argc,char**argv) {
              flagNames[i],(unsigned)flagRC,
              flagRC==0?(value?"TRUE":"FALSE"):"UNSUPPORTED");
     }
+  }
+  // DEVICE attributes, not mutable config. Old Intensity hardware may not
+  // expose the newer duplex/passthrough controls despite briefly forwarding
+  // incoming pixels on its monitor HDMI output during hotplug.
+  CFUUIDBytes attrID;memcpy(&attrID,oldAttributesIID,16);
+  void* attrs=nullptr;
+  const int32_t aq=((QI)(*(void***)device)[0])(device,attrID,&attrs);
+  printf("stage=original_output_capabilities attributes_rc=0x%08x present=%u\n",
+         (unsigned)aq,(unsigned)(attrs!=nullptr));
+  if(aq==0 && attrs){
+    void** vt=*(void***)attrs;
+    const uint32_t ids[]={0x66647570u,0x62797073u,0x69646f75u};
+    const char* names[]={"supports_full_duplex_fdup",
+                          "has_hardware_bypass_byps",
+                          "supports_idle_output_idou"};
+    for(unsigned i=0;i<3;++i){
+       bool supported=false;
+       const int32_t fr=((GetFlag)vt[3])(attrs,ids[i],&supported);
+       printf("stage=original_output_capabilities flag=%s rc=0x%08x "
+              "value=%s modified=0\n",names[i],(unsigned)fr,
+              fr==0?(supported?"TRUE":"FALSE"):"NOT_REPORTED");
+    }
+    release(attrs);
   }
   release(cfg);release(device);dlclose(lib);
   puts("stage=original_idle_config modified=0 persisted=0 rebooted=0");
