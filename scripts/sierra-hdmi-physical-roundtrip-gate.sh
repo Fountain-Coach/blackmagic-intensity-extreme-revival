@@ -28,6 +28,18 @@ fi
 kextstat | grep -F "com.blackmagic-design.desktopvideo.iokit.driver (10.4)" >/dev/null || {
   echo "stage=roundtrip_gate result=original_driver_missing" >&2; exit 21;
 }
+# KEXT presence is not hardware presence: a vanished Thunderbolt/PCI device
+# can leave the original 10.4 extension loaded. Require live vendor/device ID
+# before even considering the HDMI signal-lock or recording gates.
+pci_inventory=$(system_profiler SPPCIDataType) || {
+  echo "stage=roundtrip_gate result=PCI_INVENTORY_UNAVAILABLE" >&2; exit 35;
+}
+if ! printf '%s\n' "$pci_inventory" | grep -iq 'Vendor ID: 0xbdbd' ||
+   ! printf '%s\n' "$pci_inventory" | grep -iq 'Device ID: 0xa124'; then
+  echo "stage=roundtrip_gate result=NO_BLACKMAGIC_PCI_DEVICE vendor=0xbdbd device=0xa124" >&2
+  echo "stage=roundtrip_gate capture=NOT_STARTED playback=NOT_STARTED" >&2
+  exit 34
+fi
 system_profiler SPDisplaysDataType | grep -A3 "BMD HDMI:" |
   grep -F "1920 x 1080 @ 30 Hz" >/dev/null || {
   echo "stage=roundtrip_gate result=wrong_hdmi_source" >&2; exit 22;
