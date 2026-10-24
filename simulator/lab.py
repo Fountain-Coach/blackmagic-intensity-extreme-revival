@@ -256,6 +256,13 @@ class VideoInstrumentLab:
             else:
                 setattr(self, key, value)
         self._event("source_changed", controls=sorted(changes))
+        # Reflect source changes immediately; a stale frame must not remain
+        # readable after unplugging or powering off even before the next tick.
+        if self.receiver.streaming:
+            active, source_mode, protected = self._active_source()
+            self.receiver.source = VirtualSource(
+                mode=source_mode, connected=active, protected=protected,
+                drop_every=self.drop_every)
         return self.snapshot()
 
     def queue_output(self, pattern: str = "moving", count: int = 1) -> dict:
@@ -274,7 +281,8 @@ class VideoInstrumentLab:
     def _active_source(self) -> tuple[bool, str, bool]:
         if self.scenario == "loopback":
             active = self.cable_connected and self.transmitter.streaming
-            return active, self.transmitter.mode.name, False
+            mode = self.transmitter.mode.name if self.transmitter.mode else self.source_mode
+            return active, mode, False
         if self.scenario == "playback":
             return False, self.source_mode, False
         return (self.camera_power and self.live_view and self.cable_connected,
@@ -459,7 +467,10 @@ class VideoInstrumentLab:
 
     def frame(self, direction: str) -> MediaPacket | None:
         if direction == "input":
-            return self.captured[-1] if self.captured and self.receiver.signal_locked else None
+            active, mode, protected = self._active_source()
+            usable = (active and not protected and self.receiver.signal_locked and
+                      self.receiver.mode is not None and self.receiver.mode.name == mode)
+            return self.captured[-1] if self.captured and usable else None
         if direction == "output":
             return self.emitted[-1] if self.emitted else None
         raise DeviceError("BAD_DIRECTION", "Use input or output")
