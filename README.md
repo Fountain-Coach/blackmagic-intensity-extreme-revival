@@ -81,6 +81,14 @@ Our [pure status classifier](src/intensity-input-status.c) and [11 synthetic C t
 
 The [recovery inventory](tests/2026-10-24-sierra-recovery-inventory.md) found no configured Time Machine destination or verified alternative boot environment, and the `Fresh` volume contains existing user data. An actual PCI-driver takeover must remain blocked until a separate, tested rollback boot exists.
 
+## Live capture preflight and driver-contract progress — 24 October 2026
+
+The current MacBook and Sierra Mac mini both show a **U28E590** external display instead of the previously observed **BMD HDMI** HDMI sink. Therefore the earlier MacBook-to-Intensity cabling is no longer verified. The new [cross-version source preflight](scripts/hdmi-source-preflight.py) fails closed if no active BMD HDMI EDID and exact supported timing are present. The [bounded capture acceptance runner](scripts/accept-bmd-hdmi-capture.sh) executes the Sierra vendor-API observer only after that source preflight passes. Its first live invocation correctly stopped before remote capture (exit 2).
+
+In a separate, deliberately bounded live vendor baseline, the improved [capture observer](src/decklink-input-observer.cpp) received **84 callbacks, all marked no-source**, with **zero valid frames** and no signal lock even after three seconds. It now collects a bounded first-valid-frame sample fingerprint and timestamp without storing source video, and validates a clean teardown. Five synthetic callback fixtures passed on Sierra and modern macOS; a strict acceptance parser passed twelve synthetic tests on Ubuntu.
+
+Our independent [A124 register contract](src/intensity-register-contract.c) combines the model-specific firmware/version and video-status gates with an injectable read-only register callback. **Twelve mocked BAR0 contract tests passed on both Sierra and Ubuntu.** It has not been bound to physical PCI memory, and no independent capture driver has been loaded. The operating hardware still requires a verified recovery boot and an actual compatible unprotected input signal. See [complete 24 October test evidence](tests/2026-10-24-hdmi-source-gated-capture-and-read-contract.md) and [D4 physical acceptance](https://github.com/Fountain-Coach/blackmagic-intensity-extreme-revival/issues/8).
+
 ## Why this matters
 
 Keeping functional equipment in use may reduce electronic waste and the embodied impacts of purchasing replacement devices. But *carbon savings are not assumed*. An old computer also consumes power, and reverse-engineering activity has a cost. Our [sustainability ledger](docs/sustainability.md) explains which data would justify a real claim.
