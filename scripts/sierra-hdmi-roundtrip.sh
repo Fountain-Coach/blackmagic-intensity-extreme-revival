@@ -33,7 +33,7 @@ if [ "$action" = --prepare ]; then
 fi
 test -x "$BIN" || { echo 'prepare the roundtrip binary first' >&2; exit 22; }
 "$BIN" --probe-output-1080p30
-if [ "$action" != --run ]; then
+if [ "$action" = --check ] || [ "$action" = --prepare ]; then
   echo 'stage=hdmi_roundtrip result=output_preflight_only monitor_optical_result=NOT_MEASURED'
   exit 0
 fi
