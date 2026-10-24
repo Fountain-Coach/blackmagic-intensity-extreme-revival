@@ -196,6 +196,10 @@ static NSWindow* fixture(TapFixtureView **outView) {
         initWithContentRect:NSMakeRect(250,220,640,360)
                   styleMask:(NSWindowStyleMaskTitled|NSWindowStyleMaskClosable)
                     backing:NSBackingStoreBuffered defer:NO];
+    // NSWindow releaseWhenClosed defaults to YES on Sierra; ARC retains the
+    // fixture through main. Disable self-release to prevent over-release when
+    // the local autorelease pool drains after the bounded test.
+    [window setReleasedWhenClosed:NO];
     window.title=@"Fountain Window Tap Test Fixture";
     TapFixtureView* view=[[TapFixtureView alloc] initWithFrame:NSMakeRect(0,0,640,335)];
     view.phase=0;window.contentView=view;*outView=view;
