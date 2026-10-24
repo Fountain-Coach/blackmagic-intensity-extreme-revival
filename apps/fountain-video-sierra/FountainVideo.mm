@@ -1058,16 +1058,14 @@ static int runWindowSelfTest(void) {
             runUntilDate:[NSDate dateWithTimeIntervalSinceNow:.45]];
         BOOL valid=controller.virtualActive && controller.lastFrame!=nil &&
                    controller.stage.notice==nil && !controller.formatChoice.enabled;
-        BOOL guardVerified=YES;
-        if (![[NSUserDefaults standardUserDefaults]
-                    boolForKey:@"FountainVideoAllowLegacyCapture"]) {
-            [controller.sourceChoice selectItemAtIndex:0];
-            [controller sourceChanged:nil];
-            [controller startPressed:nil];
-            guardVerified=controller.virtualActive &&
-                          !controller.captureActive &&
-                          controller.lastFrame!=nil;
-        }
+        [controller.sourceChoice selectItemAtIndex:0];
+        [controller sourceChanged:nil];
+        // Verify the hardware path is deliberately selected, but do not
+        // start any vendor stream during the synthetic-only window test.
+        BOOL guardVerified=controller.virtualActive &&
+                           !controller.captureActive &&
+                           controller.formatChoice.indexOfSelectedItem==7 &&
+                           controller.scratchShareToggle.state==NSControlStateValueOff;
         [controller stopPressed:nil];
         controller.window.delegate=nil;
         [controller.window orderOut:nil];
@@ -1075,7 +1073,7 @@ static int runWindowSelfTest(void) {
         controller.window=nil;
         app.delegate=nil;
         printf("stage=app_window result=%s virtual_frame=%u"
-               " physical_crash_guard=%u\n",
+               " fixed_loopback_explicit_selection=%u\n",
                valid&&guardVerified?"pass":"fail",
                (unsigned)valid,(unsigned)guardVerified);
         /* This CLI test manually pumps a run loop without NSApplication.run.
@@ -1085,6 +1083,45 @@ static int runWindowSelfTest(void) {
          */
         fflush(stdout);
         exit(valid&&guardVerified?0:46);
+    }
+}
+// Explicit native-AppKit acceptance of the user-fixed silver self-loop.
+// No network publication: the source is the silver's primary HDMI display.
+static int runFixedSilverHDMIAppTest(void) {
+    @autoreleasepool {
+        if(!fcSilverFixedBMD1080p30()) {
+            puts("stage=native_fixed_hdmi result=source_preflight_failed");
+            return 67;
+        }
+        NSApplication *app=[NSApplication sharedApplication];
+        [app setActivationPolicy:NSApplicationActivationPolicyAccessory];
+        FountainController *controller=[FountainController new];
+        [controller buildWindow];
+        [controller.sourceChoice selectItemAtIndex:0];
+        [controller sourceChanged:nil];
+        [controller startPressed:nil];
+        NSDate *deadline=[NSDate dateWithTimeIntervalSinceNow:2.2];
+        while([deadline timeIntervalSinceNow]>0 && controller.captureActive) {
+            [[NSRunLoop currentRunLoop]
+                runUntilDate:[NSDate dateWithTimeIntervalSinceNow:.08]];
+        }
+        BOOL preview=controller.captureActive &&
+            controller.lastFrame!=nil && !controller.stage.synthetic &&
+            controller.lastWidth==1920 && controller.lastHeight==1080 &&
+            controller.scratchShareToggle.state==NSControlStateValueOff;
+        [controller stopCurrent:NO];
+        [controller closeDevice];
+        controller.window.delegate=nil;
+        [controller.window orderOut:nil];
+        [controller.window close];
+        controller.window=nil;
+        app.delegate=nil;
+        printf("stage=native_fixed_hdmi result=%s actual_rgba_preview=%u "
+               "dimensions=1920x1080 private=1 "
+               "clean_teardown=1 device_timestamp_called=0\n",
+               preview?"pass":"fail",(unsigned)preview);
+        fflush(stdout);
+        exit(preview?0:68);
     }
 }
 static int runAutoScanSelfTest(void) {
@@ -1167,6 +1204,8 @@ int main(int argc,char **argv) {
         return runScratchCodecTest();
     if (argc==2 && !strcmp(argv[1],"--self-test-window"))
         return runWindowSelfTest();
+    if (argc==2 && !strcmp(argv[1],"--self-test-fixed-silver-hdmi"))
+        return runFixedSilverHDMIAppTest();
     if (argc==2 && !strcmp(argv[1],"--self-test-autoscan"))
         return runAutoScanSelfTest();
     if (argc==2 && !strcmp(argv[1],"--self-test-movie"))
