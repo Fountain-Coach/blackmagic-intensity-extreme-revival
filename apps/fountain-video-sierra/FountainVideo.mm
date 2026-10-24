@@ -47,14 +47,26 @@ static const uint32_t kNoInputSource = 0x80000000u;
 static CFUUIDBytes fcUUID(const unsigned char *id) {
     CFUUIDBytes result; memcpy(&result, id, 16); return result;
 }
+/* Nikon D5200 PAL/NTSC frame rates are not necessarily exact 30/60 Hz.
+ * Scan the six actual D5200 movie formats first, PAL before NTSC.
+ * Additional exact-rate modes remain selectable manually.
+ */
+static const uint32_t kFountainVideoModes[] = {
+    0x68703530u,  // 720p50 — PAL
+    0x48693530u,  // 1080i50 — PAL
+    0x48703235u,  // 1080p25 — PAL
+    0x68703539u,  // 720p59.94 — NTSC
+    0x48693539u,  // 1080i59.94 — NTSC
+    0x48703239u,  // 1080p29.97 — NTSC
+    0x48703330u,  // 1080p30 — exact, manual only
+    0x68703630u   // 720p60 — exact, manual only
+};
+enum { kNikonAutoScanModeCount = 6 };
 static uint32_t modeCode(NSInteger choice) {
-    switch (choice) {
-        case 0: return 0x48703330u;  // 1080p30
-        case 1: return 0x48703235u;  // 1080p25
-        case 2: return 0x68703630u;  // 720p60
-        case 3: return 0x68703530u;  // 720p50
-        default: return 0;
-    }
+    if (choice < 0 ||
+        choice >= (NSInteger)(sizeof(kFountainVideoModes) /
+                             sizeof(kFountainVideoModes[0]))) return 0;
+    return kFountainVideoModes[choice];
 }
 
 static unsigned char clamp8(int v) {
@@ -348,9 +360,15 @@ static NSButton *fcButton(NSRect frame,NSString *title, id target, SEL action) {
                             @"Capture format",13,muted,NO)];
     self.formatChoice=[[NSPopUpButton alloc] initWithFrame:NSMakeRect(818,441,276,32)
                                                  pullsDown:NO];
-    [self.formatChoice addItemsWithTitles:@[@"Auto · scan 4 formats",
-                                            @"1080p30",@"1080p25",
-                                            @"720p60",@"720p50"]];
+    [self.formatChoice addItemsWithTitles:@[@"Auto · Nikon D5200 (6 formats)",
+                                            @"720p50 (PAL)",
+                                            @"1080i50 (PAL)",
+                                            @"1080p25 (PAL)",
+                                            @"720p59.94 (NTSC)",
+                                            @"1080i59.94 (NTSC)",
+                                            @"1080p29.97 (NTSC)",
+                                            @"1080p30 (exact)",
+                                            @"720p60 (exact)"]];
     [root addSubview:self.formatChoice];
     self.startButton=fcButton(NSMakeRect(818,389,131,36),@"Start",[self class],
                                @selector(startPressed:));
@@ -506,7 +524,7 @@ static NSButton *fcButton(NSRect frame,NSString *title, id target, SEL action) {
     self.stage.notice=@"WAITING FOR HDMI SIGNAL";
     if (self.autoScanning) {
         [self setMessage:[NSString stringWithFormat:
-                  @"Scanning HDMI · format %ld of 4",(long)(modeIndex+1)]];
+                  @"Scanning Nikon HDMI · format %ld of %d",(long)(modeIndex+1),kNikonAutoScanModeCount]];
     } else {
         [self setMessage:@"Capture running · checking for live frames"];
     }
@@ -561,7 +579,7 @@ static NSButton *fcButton(NSRect frame,NSString *title, id target, SEL action) {
         [self setMessage:@"HDMI signal candidate found · receiving selected mode"];
     } else if (self.autoScanning &&
                [NSDate timeIntervalSinceReferenceDate]-self.autoModeStarted>=2.7) {
-        if (self.autoModeIndex<3) {
+        if (self.autoModeIndex<kNikonAutoScanModeCount-1) {
             NSInteger next=self.autoModeIndex+1;
             [self stopCurrent:NO];
             self.autoModeIndex=next;
@@ -571,7 +589,7 @@ static NSButton *fcButton(NSRect frame,NSString *title, id target, SEL action) {
             self.autoScanning=NO;
             [self finishRecording];
             self.stage.notice=@"NO HDMI INPUT SIGNAL";
-            [self setMessage:@"No signal detected in four common capture formats."];
+            [self setMessage:@"No signal detected in six Nikon HDMI formats."];
             [self.stage setNeedsDisplay:YES];
         }
         return;
@@ -873,7 +891,7 @@ static int runAutoScanSelfTest(void) {
         [controller.sourceChoice selectItemAtIndex:0];
         [controller.formatChoice selectItemAtIndex:0];
         [controller startPressed:nil];
-        NSDate *deadline=[NSDate dateWithTimeIntervalSinceNow:16.0];
+        NSDate *deadline=[NSDate dateWithTimeIntervalSinceNow:27.0];
         while (controller.autoScanning && [deadline timeIntervalSinceNow]>0) {
             [[NSRunLoop currentRunLoop]
                 runUntilDate:[NSDate dateWithTimeIntervalSinceNow:.25]];
