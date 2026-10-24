@@ -376,6 +376,7 @@ static void* kCallbackVtable[5] = {
     uint32_t _selectedMode;
     BOOL _hardwareLocked;
     void *_heldOutputConfiguration;
+    BOOL _outputDefaultChangedByThisApp;
 }
 static NSTextField *fcLabel(NSRect frame, NSString *title, CGFloat font,
                             NSColor *color, BOOL bold) {
@@ -532,8 +533,9 @@ static NSButton *fcButton(NSRect frame,NSString *title, id target, SEL action) {
         return;
     }
     if((uint32_t)defaultMode==kMatched1080p30) {
+        _heldOutputConfiguration=config;
+        _outputDefaultChangedByThisApp=NO;
         self.deviceDetails.stringValue=@"Intensity Extreme · HDMI output 1080p30 · idle black";
-        ((FCRelease)vt[2])(config);
         return;
     }
     if((uint32_t)defaultMode!=kDefault1080i50) {
@@ -556,6 +558,7 @@ static NSButton *fcButton(NSRect frame,NSString *title, id target, SEL action) {
         return;
     }
     _heldOutputConfiguration=config;  // keep until closeDevice / app termination
+    _outputDefaultChangedByThisApp=YES;
     self.deviceDetails.stringValue=@"Intensity Extreme · HDMI output 1080p30 · idle black";
     NSLog(@"FountainVideo output_idle_default=Hp30 idle_picture=black "
           "scoped_to_native_application=1 persistent_pref_write=0");
@@ -595,9 +598,26 @@ static NSButton *fcButton(NSRect frame,NSString *title, id target, SEL action) {
     if (_input) return;  // stop capture first
     if (_heldOutputConfiguration) {
         void** cvt=*(void***)_heldOutputConfiguration;
+        if(_outputDefaultChangedByThisApp) {
+            int64_t observed=0,idle=0;
+            const int32_t m=((FCGetInt)cvt[6])(_heldOutputConfiguration,
+                                                kVideoOutputDefaultMode,&observed);
+            const int32_t i=((FCGetInt)cvt[6])(_heldOutputConfiguration,
+                                                kVideoOutputIdleOperation,&idle);
+            if(m==0 && i==0 && (uint32_t)observed==kMatched1080p30 &&
+               (uint32_t)idle==kIdleBlackFrame) {
+                const int32_t rc=((FCSetInt)cvt[5])(
+                    _heldOutputConfiguration,kVideoOutputDefaultMode,
+                    (int64_t)kDefault1080i50);
+                NSLog(@"FountainVideo original output mode restore rc=0x%08x",
+                      (unsigned)rc);
+            } else {
+                NSLog(@"FountainVideo original mode not restored: changed elsewhere");
+            }
+        }
         ((FCRelease)cvt[2])(_heldOutputConfiguration);
         _heldOutputConfiguration=NULL;
-        NSLog(@"FountainVideo output idle hold released; vendor defaults restored");
+        _outputDefaultChangedByThisApp=NO;
     }
     if (_device) {
         void **vt=*(void***)_device;
