@@ -836,6 +836,28 @@ static int runDeviceProbe(void) {
         return 0;
     }
 }
+static int runWindowSelfTest(void) {
+    @autoreleasepool {
+        NSApplication *app=[NSApplication sharedApplication];
+        [app setActivationPolicy:NSApplicationActivationPolicyAccessory];
+        FountainController *controller=[FountainController new];
+        [controller buildWindow];
+        [controller.sourceChoice selectItemAtIndex:1];
+        [controller startPressed:nil];
+        [[NSRunLoop currentRunLoop]
+            runUntilDate:[NSDate dateWithTimeIntervalSinceNow:.45]];
+        BOOL valid=controller.virtualActive && controller.lastFrame!=nil;
+        [controller stopPressed:nil];
+        controller.window.delegate=nil;
+        [controller.window orderOut:nil];
+        [controller.window close];
+        controller.window=nil;
+        app.delegate=nil;
+        printf("stage=app_window result=%s virtual_frame=%u\n",
+               valid?"pass":"fail",(unsigned)valid);
+        return valid?0:46;
+    }
+}
 static int runAutoScanSelfTest(void) {
     @autoreleasepool {
         NSApplication *app=[NSApplication sharedApplication];
@@ -911,6 +933,8 @@ static int runMovieSelfTest(void) {
     }
 }
 int main(int argc,char **argv) {
+    if (argc==2 && !strcmp(argv[1],"--self-test-window"))
+        return runWindowSelfTest();
     if (argc==2 && !strcmp(argv[1],"--self-test-autoscan"))
         return runAutoScanSelfTest();
     if (argc==2 && !strcmp(argv[1],"--self-test-movie"))
@@ -918,7 +942,7 @@ int main(int argc,char **argv) {
     if (argc==2 && !strcmp(argv[1],"--self-test")) return runSelfTest();
     if (argc==2 && !strcmp(argv[1],"--probe")) return runDeviceProbe();
     if (argc!=1) {
-        fprintf(stderr,"usage: FountainVideo [--self-test|--self-test-movie|--self-test-autoscan|--probe]\n");
+        fprintf(stderr,"usage: FountainVideo [--self-test|--self-test-window|--self-test-movie|--self-test-autoscan|--probe]\n");
         return 64;
     }
     @autoreleasepool {
