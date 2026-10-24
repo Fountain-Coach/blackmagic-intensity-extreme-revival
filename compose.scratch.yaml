@@ -8,7 +8,6 @@ services:
       dockerfile: docker/scratch.Dockerfile
     restart: unless-stopped
     init: true
-    user: "65532:65532"
     read_only: true
     cap_drop:
       - ALL
