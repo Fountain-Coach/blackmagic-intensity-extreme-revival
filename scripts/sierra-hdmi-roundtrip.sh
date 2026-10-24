@@ -6,6 +6,7 @@
 #
 # --check: verify exact 1080p30 UYVY output support; do not activate video.
 # --prepare: compile local user-space roundtrip; no system installation.
+# --cue: 1080p30 six-second output bars, requires optical monitor witness.
 # --run: capture 30 real frames and replay exact private recording via HDMI.
 set -eu
 ROOT=${SILVER_VIDEO_GUEST_HOME:-/Volumes/Fresh/FountainVideoDockerLab}
@@ -13,8 +14,8 @@ SOURCE="$ROOT/src/decklink-hdmi-record-replay.cpp"
 BIN="$ROOT/bin/fc-decklink-hdmi-record-replay"
 APP="$HOME/Applications/Fountain Video.app"
 action=${1:---check}
-case "$action" in --check|--prepare|--run) ;; *)
-  echo 'usage: sierra-hdmi-roundtrip.sh --check|--prepare|--run' >&2; exit 64 ;;
+case "$action" in --check|--prepare|--cue|--run) ;; *)
+  echo 'usage: sierra-hdmi-roundtrip.sh --check|--prepare|--cue|--run' >&2; exit 64 ;;
 esac
 if [ "$(uname -s)" != Darwin ] ||
    [ "$(sw_vers -productVersion)" != 10.12.6 ] ||
@@ -54,6 +55,14 @@ if pgrep -f "^$APP/Contents/MacOS/FountainVideo$" >/dev/null 2>&1; then
   exit 25
 fi
 echo 'stage=hdmi_roundtrip optical_monitor_notice=Blackmagic_HDMI_OUT_to_external_monitor'
+if [ "$action" = --cue ]; then
+  perl -e 'alarm 14; exec @ARGV or die "exec failed"' -- \
+     "$BIN" --monitor-cue-1080p30
+  echo 'stage=hdmi_roundtrip result=cue_API_complete monitor_visual_witness=pending'
+  exit 0
+fi
+# Give the legacy vendor capture session time to release after the GUI quits.
+sleep 5
 echo 'stage=hdmi_roundtrip recording=30_full_1920x1080_UYVY_frames confidential=1'
 perl -e 'alarm 26; exec @ARGV or die "exec failed"' -- \
    "$BIN" --record-replay-1080p30
