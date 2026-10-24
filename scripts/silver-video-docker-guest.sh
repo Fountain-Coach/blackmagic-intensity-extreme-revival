@@ -28,11 +28,12 @@ if pgrep -x xhyve >/dev/null 2>&1; then
   echo "stage=silver_video_guest result=existing_xhyve do_not_double_mount_disk=1" >&2
   exit 23
 fi
-echo "stage=silver_video_guest result=starting network=disabled physical_pci_passthrough=none"
-echo "Guest console: log in as root (offline lab), mount /dev/vda, then start the Docker daemon."
+echo "stage=silver_video_guest result=starting network=disabled physical_pci_passthrough=none com2_media=emulated_uart"
+echo "Guest console: log in as root. BEFORE Docker, disable Alpine ttyS1 getty as in scripts/alpine-guest-exclusive-com2.sh."
+echo "Then mount guest /dev/vda and start Docker. No physical HDMI capture is implied."
 exec "$ROOT/xhyve" -A -c 2 -m 2G \
   -s 0:0,hostbridge \
   -s "3,ahci-cd,$ROOT/alpine-virt-3.24.3-x86_64.iso" \
   -s "4,virtio-blk,$ROOT/docker-guest.raw" \
-  -s 31,lpc -l com1,stdio \
+  -s 31,lpc -l com1,stdio -l com2,autopty \
   -f "kexec,$ROOT/vmlinuz-virt,$ROOT/initramfs-virt,console=ttyS0,115200 modules=loop,squashfs,sd-mod,ahci alpine_dev=cdrom"
