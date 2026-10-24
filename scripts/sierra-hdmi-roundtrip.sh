@@ -28,7 +28,7 @@ if [ "$action" = --prepare ]; then
   mkdir -p "$ROOT/bin"
   chmod 700 "$ROOT/bin"
   clang++ -std=c++11 -Wall -Wextra -Werror -O1 \
-    "$SOURCE" -framework CoreFoundation -framework CoreGraphics -o "$BIN"
+    "$SOURCE" -framework CoreFoundation -framework CoreGraphics -framework ImageIO -o "$BIN"
   chmod 700 "$BIN"
   echo 'stage=hdmi_roundtrip result=built user_space_only=1'
 fi
