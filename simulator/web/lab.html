@@ -179,11 +179,12 @@ kbd{background:#25333a;padding:2px 4px;border-radius:3px;color:var(--text)}
   <div role="status" aria-live="polite" class="status" id="status">The Nikon and physical Blackmagic device are not required.</div>
 </section>
 </div>
-<div class="footer">All video is generated as complete 8-bit YUV 4:2:2 buffers, accompanied by 48 kHz stereo PCM packets and exact rational presentation timestamps. Each instrument enforces half-duplex; simultaneous virtual loopback uses <em>two</em> instruments. MIDI, analog electrical conversion, real interlaced fields, GPU/Syphon and PCI/firmware are not emulated. Nothing here observes a physical Nikon or HDMI port. <a href="/">Open the original minimal simulator</a> · <a href="/api/lab/capabilities">Machine-readable capabilities</a>.</div>
+<div class="footer">All video is generated as complete 8-bit YUV 4:2:2 buffers, accompanied by 48 kHz stereo PCM packets and exact rational presentation timestamps. Each instrument enforces half-duplex; simultaneous virtual loopback uses <em>two</em> instruments. MIDI, analog electrical conversion, real interlaced fields, GPU/Syphon and PCI/firmware are not emulated. Nothing here observes a physical Nikon or HDMI port. <a href="/">Original minimal simulator</a> · <a id="browser-scratch-link" href="/scratch">Browser Scratch</a> · <a href="/api/lab/capabilities">Machine-readable capabilities</a>.</div>
 </main>
 <script>
 'use strict';
 const $=id=>document.getElementById(id);
+$('browser-scratch-link').href=location.protocol+'//'+location.hostname+':8273/scratch';
 let last=null, timer=null, busy=false, lastRendered=-1;
 async function api(path, payload) {
  const opts=payload===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)};
