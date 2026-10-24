@@ -32,7 +32,7 @@ def digest(data):
     return hashlib.sha256(data).hexdigest().encode("ascii")
 
 
-def send_line(fd, line, timeout=SERIAL_TIMEOUT):
+def send_line(fd, line, timeout=SERIAL_TIMEOUT, pace_seconds=0):
     if not isinstance(line, bytes):
         line = line.encode("ascii")
     if b"\n" in line or b"\r" in line or len(line) > MAX_LINE - 1:
@@ -43,10 +43,17 @@ def send_line(fd, line, timeout=SERIAL_TIMEOUT):
         wait = until - time.time()
         if wait <= 0 or not select.select([], [fd], [], wait)[1]:
             raise WireError("serial write timeout")
-        n = os.write(fd, data)
+        # xhyve emulates an old 16550 UART with a 16-byte receive FIFO.
+        # Writing a whole line to the host PTY can silently overrun it.
+        # Pace host->guest bytes only, until a correctly acknowledged
+        # hardware-host acceptance establishes a faster safe rate.
+        window = data[:1] if pace_seconds else data
+        n = os.write(fd, window)
         if n <= 0:
             raise WireError("serial write closed")
         data = data[n:]
+        if pace_seconds:
+            time.sleep(pace_seconds)
 
 
 def read_line(fd, pending, timeout=SERIAL_TIMEOUT):
