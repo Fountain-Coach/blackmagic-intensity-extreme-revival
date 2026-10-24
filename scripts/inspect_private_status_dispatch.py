@@ -28,10 +28,18 @@ WRITE_SYMBOL = (
     "DeckLink_HardwareAbstractionDeckLinkHDProPCIExpress"
     "19WriteRegisterEndianEPVjj"
 )
+FIRMWARE_SYMBOL = (
+    "__ZN79com_blackmagic_design_iokit_"
+    "DeckLink_HardwareAbstractionDeckLinkHDProPCIExpress"
+    "18getFirmwareVersionEPjS0_"
+)
 
 LC_SYMTAB = 2
 READ_SLOT_BYTES = 0x7A0
 WRITE_SLOT_BYTES = 0x7A8
+FIRMWARE_SLOT_BYTES = 0x340
+VERSION_TABLE_VA = 0x61EF4
+A124_MODEL_CODE = 0x36
 # Itanium x86-64 ABI vtable pointer starts after offset-to-top and RTTI.
 VTABLE_ADDRESS_POINT_DELTA = 16
 
@@ -82,7 +90,7 @@ def symbol_addresses(data):
         if terminator < 0:
             continue
         name = strings[strx:terminator].decode("ascii", "replace")
-        if name in (VTABLE_SYMBOL, READ_SYMBOL, WRITE_SYMBOL):
+        if name in (VTABLE_SYMBOL, READ_SYMBOL, WRITE_SYMBOL, FIRMWARE_SYMBOL):
             if name in symbols:
                 raise ValueError("Duplicate named ABI symbol")
             symbols[name] = value
@@ -98,12 +106,20 @@ def read_slot_target(data, vtable_vmaddr, slot_bytes):
     return struct.unpack_from("<Q", data, offset)[0]
 
 
+def expected_firmware_version(data, table_va, model_code):
+    """Read one model byte from a caller-supplied version table address."""
+    if not 0 <= model_code < 0x4D:
+        raise ValueError("Model code out of version table bounds")
+    offset = translate_va(data, table_va + model_code * 16)
+    return data[offset]
+
+
 def analyze_private_copy(data):
     digest = hashlib.sha256(data).hexdigest()
     if digest != ORIGINAL_SHA256:
         raise ValueError("Unsupported binary SHA-256; no inference permitted")
     symbols = symbol_addresses(data)
-    for name in (VTABLE_SYMBOL, READ_SYMBOL, WRITE_SYMBOL):
+    for name in (VTABLE_SYMBOL, READ_SYMBOL, WRITE_SYMBOL, FIRMWARE_SYMBOL):
         if name not in symbols:
             raise ValueError("Required Mach-O symbol unavailable: " + name)
     vtable = symbols[VTABLE_SYMBOL]
@@ -111,6 +127,14 @@ def analyze_private_copy(data):
     write_target = read_slot_target(data, vtable, WRITE_SLOT_BYTES)
     if read_target != symbols[READ_SYMBOL] or write_target != symbols[WRITE_SYMBOL]:
         raise ValueError("HDExtreme virtual dispatch does not match expected ABI")
+    firmware_target = read_slot_target(data, vtable, FIRMWARE_SLOT_BYTES)
+    if firmware_target != symbols[FIRMWARE_SYMBOL]:
+        raise ValueError("HDExtreme firmware version dispatch does not match")
+    expected_version = expected_firmware_version(
+        data, VERSION_TABLE_VA, A124_MODEL_CODE
+    )
+    if expected_version != 0x0B:
+        raise ValueError("Unexpected model-specific firmware version table byte")
     return {
         "status": "static_vtable_match",
         "sha256": digest,
@@ -119,6 +143,10 @@ def analyze_private_copy(data):
         "read_method": "HDProPCIExpress::ReadRegisterEndian",
         "write_slot": hex(WRITE_SLOT_BYTES),
         "write_method": "HDProPCIExpress::WriteRegisterEndian",
+        "firmware_version_slot": hex(FIRMWARE_SLOT_BYTES),
+        "firmware_version_method": "HDProPCIExpress::getFirmwareVersion",
+        "expected_firmware_version": hex(expected_version),
+        "live_firmware_version_observed": False,
         "runtime_class_verified": False,
         "hardware_access": False,
     }
