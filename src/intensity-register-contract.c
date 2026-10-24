@@ -41,6 +41,12 @@ FCReadContractResult fc_evaluate_a124_read_contract(
      * driver. It does NOT assert the physical firmware is ready or modify it.
      */
     input_gates.readiness_28a = 1;
+    if (input_gates.guard_289 || input_gates.guard_28b ||
+        (input_gates.feature_1eb & 0x08u) == 0u) {
+        r.input.classification = FC_INPUT_GATES_CLOSED;
+        r.state = FC_READ_CONTRACT_GUARDS_CLOSED;
+        return r;
+    }
     ++r.register_reads;
     if (!read32(context, FC_A124_INPUT_STATUS_BAR0_OFFSET,
                 &r.raw_input_status)) {
