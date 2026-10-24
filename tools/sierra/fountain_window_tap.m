@@ -258,7 +258,7 @@ static BOOL publish(CGImageRef image,NSOpenGLContext* gl,SyphonServer *server) {
     return error==GL_NO_ERROR;
 }
 static void usage(void) {
-    puts("usage: fountain-window-tap --list | --list-syphon | --fixture-test | --fixture-publish | --fixture-wlan");
+    puts("usage: fountain-window-tap --list | --list-syphon | --fixture-test | --fixture-publish | --fixture-wlan | --fixture-hold");
     puts("  --probe --id WINDOW_ID --pid OWNER_PID [--rect x,y,w,h]");
     puts("  --snapshot --id WINDOW_ID --pid OWNER_PID [--rect x,y,w,h] --filename NAME.png");
     puts("  --publish --id WINDOW_ID --pid OWNER_PID [--rect x,y,w,h] --allow-local-syphon");
@@ -269,6 +269,26 @@ int main(int argc,const char**argv) {
         if(!originalSilver()){puts("stage=window_tap result=WRONG_HOST");return 20;}
         if(argc==2 && strcmp(argv[1],"--list")==0){listWindows();return 0;}
         if(argc==2 && strcmp(argv[1],"--list-syphon")==0){listSyphon();return 0;}
+        // An independent process can select/crop this generated window via
+        // --id and --pid, proving cross-application capture without ever
+        // reading an actual private application.
+        if(argc==2 && strcmp(argv[1],"--fixture-hold")==0) {
+            TapFixtureView *view=nil;
+            NSWindow *holder=fixture(&view);
+            printf("stage=window_fixture owner_pid=%d window_id=%u mode=HOLD\n",
+                   (int)getpid(),(unsigned)holder.windowNumber);
+            fflush(stdout);
+            for(unsigned j=0;j<100;++j) {
+                view.phase=j*7;
+                [view setNeedsDisplay:YES];
+                [view displayIfNeeded];
+                [[NSRunLoop currentRunLoop] runUntilDate:
+                       [NSDate dateWithTimeIntervalSinceNow:.20]];
+            }
+            [holder close];
+            puts("stage=window_fixture result=HOLD_FINISHED frames_generated=100");
+            return 0;
+        }
         BOOL selfTest=argc==2 && strcmp(argv[1],"--fixture-test")==0;
         BOOL fixturePublish=argc==2 && strcmp(argv[1],"--fixture-publish")==0;
         BOOL fixtureLAN=argc==2 && strcmp(argv[1],"--fixture-wlan")==0;
@@ -285,8 +305,10 @@ int main(int argc,const char**argv) {
                     hasWindow=numeric(argv[++i],&win,1,UINT32_MAX);
                 else if(!strcmp(argv[i],"--pid")&&i+1<argc)
                     hasOwner=numeric(argv[++i],&owner,1,INT32_MAX);
-                else if(!strcmp(argv[i],"--rect")&&i+1<argc)
+                else if(!strcmp(argv[i],"--rect")&&i+1<argc) {
                     rect=parseRect(argv[++i],&hasRect);
+                    if(!hasRect){puts("stage=window_tap result=INVALID_RECT");return 65;}
+                }
                 else if(!strcmp(argv[i],"--filename")&&i+1<argc)
                     filename=[NSString stringWithUTF8String:argv[++i]];
                 else if(!strcmp(argv[i],"--allow-local-syphon"))
