@@ -1,0 +1,54 @@
+{
+  "kind": "physical_input_status_witness",
+  "date": "2026-10-24",
+  "rig": "Silver Macmini5,3 Sierra HDMI OUT -> original Intensity Extreme HDMI IN; Intensity HDMI OUT disconnected",
+  "source_original": {
+    "width": 1920,
+    "height": 1080,
+    "ui_refresh_hz": 30,
+    "registry_clock_hz": 73979530,
+    "pixels_per_frame": 2475000,
+    "registry_derived_hz": 29.890719191919192
+  },
+  "trial": {
+    "width": 1280,
+    "height": 720,
+    "ui_refresh_hz": 60,
+    "set_mode_rc": 0,
+    "selected_confirmed": true,
+    "registry_clock_hz": 73979530,
+    "pixels_per_frame": 1237500,
+    "registry_derived_hz": 59.781438383838385,
+    "clock_is_wire_measurement": false
+  },
+  "decklink": {
+    "model": "Intensity Extreme",
+    "enumerated_input_mode": "720p60",
+    "mode_code": "0x68703630",
+    "frame_rate": "60000/1000",
+    "connector_hdmi": true,
+    "enable_input_status": "0x00000000",
+    "input_lock_samples": 8,
+    "input_locked_samples": 0,
+    "detected_mode_success_samples": 0,
+    "detected_mode_error": "0x80000001",
+    "disable_input_status": "0x00000000",
+    "real_capture_frames": 0,
+    "stream_started": false
+  },
+  "recovery": {
+    "controller_original_restored": true,
+    "guard_armed": true,
+    "guard_result": "PASS",
+    "guard_trigger": "controller_done",
+    "external_mac_delayed_fallback_result": "VERIFIED_ORIGINAL",
+    "real_guard_failure_recovery_tested": false
+  },
+  "physical_capture_accepted": false,
+  "notes": [
+    "The CV/CoreGraphics source mode label is not a direct HDMI wire-clock measurement.",
+    "The no-stream probe did not call SetCallback or StartStreams.",
+    "The 720p60 trial falsifies the claim that selecting nominal 60 Hz by itself restores input lock.",
+    "No driver, firmware, PCI, or physical cable modification was made."
+  ]
+}
