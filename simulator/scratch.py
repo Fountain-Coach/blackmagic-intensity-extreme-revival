@@ -56,6 +56,8 @@ class ScratchHistory:
         self._next_seq = 0
         self._byte_count = 0
         self._evicted = 0
+        self._epoch = 0
+        self._last_epoch_reason = "initial"
 
     def push(self, image, pts_ns, origin, width, height):
         if not isinstance(image, bytes) or not image.startswith(b"\xff\xd8") or \
@@ -73,6 +75,16 @@ class ScratchHistory:
         if len(image) > self.max_bytes:
             raise InvalidFrame("Frame larger than total history capacity")
         with self._lock:
+            if self._items:
+                prior=self._items[-1]
+                if origin != prior.origin or pts_ns < prior.pts_ns:
+                    self._epoch += 1
+                    self._last_epoch_reason = ("source_changed" if origin != prior.origin
+                                               else "timestamp_rollback")
+                    self._evicted += len(self._items)
+                    self._items.clear()
+                    self._index.clear()
+                    self._byte_count = 0
             seq = self._next_seq
             self._next_seq += 1
             item = ScratchFrame(seq, image, pts_ns, origin,
@@ -111,6 +123,8 @@ class ScratchHistory:
                 "max_bytes": self.max_bytes,
                 "retained_bytes": self._byte_count,
                 "evicted_frames": self._evicted,
+                "stream_epoch": self._epoch,
+                "epoch_reason": self._last_epoch_reason,
                 "scratching": {
                     "random_access": True,
                     "forward": True,
