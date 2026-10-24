@@ -12,6 +12,7 @@ typedef void*(*Factory)();
 typedef int32_t(*Next)(void*,void**);
 typedef int32_t(*QI)(void*,CFUUIDBytes,void**);
 typedef int32_t(*GetInt)(void*,uint32_t,int64_t*);
+typedef int32_t(*GetFlag)(void*,uint32_t,bool*);
 typedef uint32_t(*Release)(void*);
 static const uint8_t oldConfigIID[16]={
    0x1e,0x69,0xfc,0xf6,0x42,0x03,0x49,0x36,
@@ -45,6 +46,20 @@ int main(int argc,char**argv) {
       printf("stage=original_idle_config key=%s rc=0x%08x "
              "value_fourcc_or_flags=0x%08x source_change=0\n",
              names[i],(unsigned)result,(unsigned)(uint32_t)val);
+    }
+    // On older devices `bvoc` may independently control whether HDMI OUT
+    // shows black or incoming video during capture. It differs from idle
+    // `voio=blac`; do not infer the two are equivalent.
+    const uint32_t flagKeys[]={0x62766f63u,0x62797073u};
+    const char* flagNames[]={"black_during_capture_bvoc",
+                            "hardware_bypass_byps"};
+    for(unsigned i=0;i<2;++i){
+      bool value=false;
+      int32_t flagRC=((GetFlag)(*(void***)cfg)[3])(cfg,flagKeys[i],&value);
+      printf("stage=original_passthrough_flags key=%s rc=0x%08x "
+             "value=%s used_as_test_signal=0 modified=0\n",
+             flagNames[i],(unsigned)flagRC,
+             flagRC==0?(value?"TRUE":"FALSE"):"UNSUPPORTED");
     }
   }
   release(cfg);release(device);dlclose(lib);
