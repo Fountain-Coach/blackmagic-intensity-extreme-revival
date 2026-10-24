@@ -2,37 +2,41 @@
 
 **Version:** 0.1 · 24 October 2026  
 **Target:** macOS Sierra 10.12.6, 2011 Intel Mac mini, Xcode 9.2  
-**Status:** Real native desktop application **starts in software-only synthetic video mode**. It no longer queries Blackmagic hardware at launch. A dedicated **Software lab…** button opens the [complete video/audio simulation](../../docs/full-software-video-laboratory.md). Optional real capture still uses the installed Desktop Video 10.4 driver if deliberately selected; physical HDMI capture remains unverified.
+**Status (24 October 2026): ORIGINAL HARDWARE HDMI CAPTURE ACCEPTED.** The silver Mac mini continues booting **Sierra 10.12.6**, drives the **same physical HDMI cable from its HDMI OUT into the original Blackmagic Intensity Extreme HDMI IN**, and owns the device over native Thunderbolt 1. We have **genuinely captured separate full 1920×1080 YUV frames, encoded them as private JPEGs, accepted them in separate Ubuntu Linux Docker staging**, and physically tested this **native Fountain Video AppKit application** with real RGBA preview and clean stream/device release, all using original untouched Blackmagic driver **10.4**. [Complete hardware acceptance](../../tests/2026-10-24-fixed-silver-hdmi-physical-capture-and-native-app-accepted.md).
+
+## Fixed physical HDMI loopback (no alternative sources)
+
+**The rig is final:** silver Mac's own HDMI OUT → ORIGINAL Intensity Extreme HDMI IN → the SAME silver Mac over Thunderbolt via Comdis dock. Do not propose a camera, second Mac, generator or other video source as a substitute.
+
+The original 10.4 DeckLink callback crash was narrowed by independent per-method tests. `GetFlags`, dimensions, `GetBytes` and bounded pixel copying work and return genuine frame pixels; invoking the old `GetStreamTime` accessor returned an abnormal result and reproduced a destructor crash. The **repair never calls that method**. Instead it copies each borrowed vendor frame into its own `NSData` during the callback, uses explicit **host monotonic timestamps** and decimates/previews frames via AppKit after crossing the callback boundary. It arms **exact 1080p30 / 2vuy**, waits for **two stable actual input signal-lock readings**, then starts streaming. On its own physical Sierra computer, the native application passed:
+
+    stage=native_fixed_hdmi result=pass actual_rgba_preview=1 dimensions=1920x1080 private=1 clean_teardown=1 device_timestamp_called=0
+
+Real native logs repeatedly reported **"Real video frame received."** Converter, synthetic JPEG and synthetic AppKit window tests passed as regressions.
+
+**Installed and running:** `~/Applications/Fountain Video.app` is the tested repaired native application (candidate source commit `6c92aca`), not just a new diagnostic executable. It was installed after safely preserving private rollback bundles on both Data and Fresh, and launched successfully with the original DeckLinkAPI 10.4 runtime loaded. On launch it **automatically selects REAL HDMI** only if the exact BMD HDMI 1920×1080@30 display is verified; otherwise it uses simulated color bars. **Main-display privacy:** whenever real hardware is selected, `Stream frames to private browser` switches **OFF by default**, so the Mac's desktop cannot be sent to the network merely by launching this app.
 
 ## Browser Scratch integration
 
-## Legacy Sierra capture crash containment (24 October 2026)
+The separate Ubuntu **Docker staging** scratch at `127.0.0.1:8373` privately accepted **two actual physical JPEGs**, both HTTP 201 with `decklink-observed`, `simulated=false` and matching source-to-receiver SHA-256. The browser page responded HTTP 200. **These frames were uploaded in a controlled private transfer after capture**; continuous automatically streamed HDMI-to-Docker frames have **not yet been accepted**. The original trusted-LAN scratch receiver `192.168.8.50:8273` remains separate and its previous synthetic stream was not replaced. The silver Mac's local Linux/Docker guest uses a much slower COM2 serial transport suitable for integration tests, **not real-time video**. The existing private browser-share toggle is explicit opt-in for physical desktop frames.
 
-The physical 1080p30 HDMI loopback from the silver Mac mini established BMD HDMI monitor identification but crashed during the installed 2015-era Desktop Video 10.4 runtime's input-frame destructor. This was a **real hardware attempt that failed**, distinct from the working virtual browser path.
+## Historical 10.4 capture crash (now repaired for this fixed rig)
 
-Fountain Video now **keeps the current synthetic/browser source running** if someone chooses Blackmagic HDMI input and presses Start while the known-crashing legacy input path is suspended. There is no popup, driver change, system restart or privileged call. The AppKit window test explicitly verifies this (physical_crash_guard=1), and native JPEG/browser synthetic streaming still works.
-
-The single reversible user-default name is FountainVideoAllowLegacyCapture, deliberately false when absent. A controlled, isolated physical test on a boot-recoverable environment may explicitly enable that preference, but **do not do so on the existing Sierra boot merely to repeat the crash**.
-
-Safe on-host test, requiring no external video:
-
-    sh scripts/sierra-hdmi-loopback-preflight.sh
-
-Run it from the repository root. It checks active BMD HDMI EDID and changing Mac framebuffer pixels; the real observer callback against a source-owned fake DeckLink frame; the original installed Blackmagic driver and the retained vendor crash record. [Full witness report](../../tests/2026-10-24-hdmi-output-framebuffer-and-frame-lifetime-triage.md). A passed preflight **does not** mean that receiver input lock or captured pixels have been achieved.
+Earlier tests crashed in `CDeckLinkVideoInputFrame::~CDeckLinkVideoInputFrame()`; the original source-only preflight did not enter the video callback and could not establish physical pixels. Those tests are historical and **do not supersede** the full acceptance achieved above. The signed alternative Desktop Video 10.11.2 installer and original 10.4 rollback remain archived for recovery purposes; **no driver installation, firmware update or Sierra OS replacement was needed.**
 
 The actual Sierra application now includes a **Browser scratch…** button and **Stream frames to private browser** checkbox. Its source-neutral frame path converts both generated video and optional DeckLink-received YUV frames into preview images, then uses [FCScratchPublisher](FCScratchPublisher.mm) for token-protected, bounded, single-flight JPEG uploads to the Ubuntu receiver. The user-owned application does not launch the receiver itself.
 
-**[Browser Scratch](http://192.168.8.50:8273/scratch)** runs on the trusted WLAN. It supports a rolling 144-frame cache, reverse/forward shuttle, freeze, jog dragging and return to live. The [full design and security boundary](../../docs/hdmi-to-browser-stream-and-scratch.md) explains how source-provenance, stream epochs and media acceptance remain separate. The app starts in **synthetic source mode**, so the Nikon can remain off. The physical DeckLink-to-browser branch is implemented but has not received a verified real HDMI frame.
+**[Browser Scratch](http://192.168.8.50:8273/scratch)** runs on the trusted WLAN. It supports a rolling 144-frame cache, reverse/forward shuttle, freeze, jog dragging and return to live. The [full design and security boundary](../../docs/hdmi-to-browser-stream-and-scratch.md) explains how source-provenance, stream epochs and media acceptance remain separate. The app now starts with the **verified fixed silver HDMI loopback** when it is present, while the synthetic lab remains a fallback. Browser publishing stays OFF for the Mac's main-display capture unless deliberately selected.
 
 Compile and test the JPEG encoder using the app executable's `--self-test-scratch` argument. Unlike a cosmetic mock, the Sierra application was witnessed actually sending generated video bytes to the Ubuntu receiver, which were shown in Chrome on a separate Mac. The browser's eight interaction acceptance checks passed. Audio is not yet forwarded by this scratch transport.
 
 ## What the application does
 
-Fountain Video is a native **AppKit application**. On launch it selects **Virtual color bars · test** and starts drawing generated frames, without any camera, HDMI connection or Blackmagic device query. The separate full-stack simulator runs on the Ubuntu Mac mini and is reachable through a **Software lab…** button. Only optional real capture loads the installed **DeckLinkAPI.framework**; the isolated crashing CoreMediaIO plug-in is not required.
+Fountain Video is a native **AppKit application**. On the fixed silver HDMI loopback it opens the **genuine captured hardware preview** by default, with no LAN sharing. Without the verified BMD HDMI 1080p30 monitor, it selects virtual color bars and does not open the Blackmagic hardware. The full-stack software simulator remains separately available through the **Video lab…** button. Original `DeckLinkAPI.framework` handles real capture, without the isolated crashing CoreMediaIO plugin.
 
 Its window provides:
 
-- Visibly labeled **virtual color bars on startup**, without any external video or hardware dependencies; optional Blackmagic HDMI input is only selected explicitly.
+- Verified **physical 1080p30 HDMI preview on the silver's final fixed loopback**, or visibly labeled virtual color bars as a safe fallback when that monitor is absent.
 - **Auto · Nikon D5200 (6 formats)** (PAL: 720p50, 1080i50, 1080p25; NTSC: 720p59.94, 1080i59.94, 1080p29.97), plus manual exact-rate choices. Modes are tried sequentially, prioritizing PAL for the connected D5200; failed modes release the stream before the next attempt. No system monitor modes are changed. See the [D5200-specific setup](../../docs/nikon-d5200-hdmi-setup-2026-10-24.md).
 - Native **Start/Stop**, with callback counts, no-source status, and clean stream release.
 - Live video preview using 8-bit YUV 4:2:2 to RGBA conversion when the device actually delivers valid frames.
@@ -92,7 +96,7 @@ The first command-line AppKit GUI test revealed an artificial autorelease-pool t
 - Blackmagic Desktop Video 10.4 kernel components remain loaded; the independent IOKit kernel-extension prototype remains unloaded.
 - The crash-prone system-wide CoreMediaIO plug-in stays isolated.
 - No firmware, EEPROM, PCI BAR, DMA, startup volume, system display setting or modern MacBook setup was changed.
-- Real-source HDMI preview and movie capture are **implemented but not physically validated** because the input remains without a verified signal.
+- **Real hardware HDMI preview physically validated** by native AppKit test; movie export is implemented but a separately encoded **full physical-source movie** remains to be accepted. Still no device-native timestamps or sustained Docker live frame-rate acceptance.
 - HDMI **output** playback, audio recording, analog connector switching and a fully independently owned kernel driver are not implemented in version 0.1.
 
 The app can control a connected device directly. No application can electrically supply an HDMI input signal without an actual connected source. That limit is represented by a clear NO HDMI INPUT SIGNAL state rather than a workflow requiring the user to manipulate another Mac.
