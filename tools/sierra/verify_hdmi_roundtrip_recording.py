@@ -49,7 +49,8 @@ def verify(directory, output_log):
     safe_file(manifest,"manifest",uid)
     safe_file(output_log,"output_log",uid)
     with open(manifest,"rb") as f:
-        rows=f.read().splitlines()
+        rows=[line.decode("ascii") if not isinstance(line,str) else line
+              for line in f.read().splitlines()]
     if len(rows)!=31 or rows[0]!="index\twidth\theight\trow_bytes\thost_monotonic_ns\tbytes\tsha256":
         raise ValueError("incorrect_manifest_length_or_schema")
     hashes=[]
@@ -83,6 +84,8 @@ def verify(directory, output_log):
         hashes.append(sha)
     with open(output_log,"rb") as f:
         text=f.read(20000)
+        if not isinstance(text,str):
+            text=text.decode("ascii")
     if "stage=replay result=api_accepted" not in text or \
        "recorded_frames=30 submitted=60" not in text or \
        "byte_identical_output_buffers=60" not in text or \
