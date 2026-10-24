@@ -191,5 +191,17 @@ class VirtualLabHTTPTests(unittest.TestCase):
         self.assertFalse(s["output"]["streaming"])
 
 
+    def test_output_url_blocks_stale_frames_after_underflow(self):
+        self.postjson("/api/lab/configure", {"scenario":"loopback","mode":"PAL"})
+        self.postjson("/api/lab/step", {"count":1})
+        self.assertEqual(self.req("/api/lab/output.png")[0], 200)
+        self.postjson("/api/lab/source", {"output_auto_fill":False})
+        self.postjson("/api/lab/step", {"count":1})
+        self.assertEqual(self.req("/api/lab/output.png")[0], 409)
+        self.postjson("/api/lab/queue", {"count":1,"pattern":"moving"})
+        self.postjson("/api/lab/step", {"count":1})
+        self.assertEqual(self.req("/api/lab/output.png")[0], 200)
+
+
 if __name__ == "__main__":
     unittest.main()
