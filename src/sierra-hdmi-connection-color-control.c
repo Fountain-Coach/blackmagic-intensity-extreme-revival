@@ -145,7 +145,9 @@ int main(int argc,char** argv){
             if(bmd)IOObjectRelease(bmd);return 26;
         }
     }
-    if(cmod!=COLOR_444 && cmod!=COLOR_422){
+    // The physical cyuv=422 trial selected RGB (cmod=0x1), not 422.
+    // Automatic restoration MUST accept RGB as an intermediate state.
+    if(cmod!=COLOR_444 && cmod!=COLOR_422 && !(restore && cmod==0x1)){
         puts("stage=color_control result=UNEXPECTED_SELECTED_COLOR");
         if(bmd)IOObjectRelease(bmd);return 27;
     }
