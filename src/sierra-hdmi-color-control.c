@@ -5,8 +5,8 @@
  *
  * Run only with separately armed host+external watchdog.
  * --inspect     : no changes; two independent service access paths
- * --set422      : nonpersistent driver parameter write (no CommitParameters)
- * --restore444  : idempotent restore original cmod=0x100 (no CommitParameters)
+ * --set422      : DISABLED (cmod is a readout, not a control)
+ * --restore444  : DISABLED (restoration must target cyuv=automatic)
  * No display-resolution writes or HDMI input streams.
  *
  * IMPORTANT: IODisplay selected mode is not direct HDMI wire AVI InfoFrame data.
@@ -91,6 +91,13 @@ int main(int argc,char**argv) {
         strcmp(argv[1],"--restore444"))){
         puts("usage: sierra-hdmi-color-control --inspect|--set422|--restore444");
         return 64;
+    }
+    // Deprecated experiment: cmod is a selection readout, not a usable
+    // colour-control input. The old cmod restore is also unsafe after RGB.
+    if(strcmp(argv[1],"--inspect")){
+        puts("stage=color_control result=BLOCKED_RETIRED_CMOD_API"
+             " writes=0 restore_via=cyuv_automatic");
+        return 65;
     }
     const int write=strcmp(argv[1],"--inspect")!=0;
     const uint32_t target=strcmp(argv[1],"--set422")==0?kYCbCr422:kYCbCr444;
