@@ -47,7 +47,7 @@ class HDMIInputPreflightTests(unittest.TestCase):
     def test_same_name_ambiguous_copies(self):
         self.assertEqual(module.evaluate([
             d("BMD HDMI", "1920 x 1080 @ 50 Hz"),
-            d("BMD HDMI", "1920 x 1080 @ 30 Hz")], "1080p30"), 0)
+            d("BMD HDMI", "1920 x 1080 @ 30 Hz")], "1080p30"), 4)
 
     def test_nested_system_profile_format(self):
         fixture = [{"_dataType": "SPDisplaysDataType", "_items": [
