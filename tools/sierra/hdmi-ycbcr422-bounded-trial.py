@@ -146,83 +146,8 @@ def watchdog(lease,ready,audit):
 
 
 def run_trial():
-    # Even direct module calls may not re-run the invalid experiment.
+    """Retired: IOGraphics 515.x maps nonautomatic cyuv to RGB, not 422."""
     raise RuntimeError("IOGraphics_RGB_rewrite_blocks_422_trials")
-    baseline=preflight()
-    root=tempfile.mkdtemp(prefix="fc-bmd-color-trial-")
-    lease=os.path.join(root,"lease.json")
-    ready=os.path.join(root,"ready.json")
-    audit=os.path.join(root,"audit.json")
-    done=os.path.join(root,"done")
-    guard_log=open(os.path.join(root,"guard.log"),"wb")
-    result={"stage":"physical_bmd_ycbcr422_lock_trial","original_color":ORIGINAL,
-            "requested_color":TARGET, "original_mode":"1080p30",
-            "source_color_mode_is_not_wire_measurement":True,
-            "video_streams_started":False,"driver_modified":False,
-            "display_mode_changed":False}
-    guard=None
-    try:
-        now=time.time()
-        atomic_json(lease,{"contract":LEASE_CONTRACT,
-                           "started":now,"deadline":now+MAX_LEASE_S,
-                           "controller_pid":os.getpid(),"done_file":done})
-        guard=subprocess.Popen(
-            [sys.executable,os.path.abspath(__file__),
-             "--watchdog",lease,ready,audit],
-            stdin=open(os.devnull,"rb"),stdout=guard_log,
-            stderr=subprocess.STDOUT,close_fds=True,
-            preexec_fn=os.setsid)
-        for i in range(36):
-            if os.path.exists(ready):break
-            if guard.poll() is not None:break
-            time.sleep(.10)
-        if not os.path.exists(ready) or guard.poll() is not None:
-            raise RuntimeError("independent_watchdog_not_ready")
-        result["watchdog_armed"]=True
-        print("stage=color_trial watchdog=armed original=YCbCr444 target=YCbCr422")
-        sys.stdout.flush()
-        # Confirm original has not drifted since guard armed.
-        preflight()
-        changed=bounded([HELPER,"--set422"],4)
-        result["color_attempt"]=changed
-        print("stage=color_trial change_rc=%s"%changed["rc"])
-        print(changed["text"])
-        sys.stdout.flush()
-        readback=bounded([HELPER,"--inspect"],3)
-        result["during_color"]=current_color(readback["text"])
-        print("stage=color_trial actual_selected=%s"%result["during_color"])
-        sys.stdout.flush()
-        if result["during_color"]!=TARGET:
-            raise RuntimeError("YCbCr422_not_confirmed_by_source_driver")
-        result["receiver"]=bounded([RECEIVER,"--probe-active-1080p30"],5)
-        print("stage=color_trial receiver_probe_rc=%s"%result["receiver"]["rc"])
-        print(result["receiver"]["text"])
-        sys.stdout.flush()
-    except Exception as e:
-        result["trial_error"]=str(e)[:180]
-        print("stage=color_trial rejected_or_failed=%s"%result["trial_error"])
-        sys.stdout.flush()
-    finally:
-        result["controller_restoration"]=do_restore()
-        if result["controller_restoration"]["verified"]:
-            with open(done,"wb") as f:f.write(b"restored\n")
-        if guard is not None:
-            for i in range(65):
-                if guard.poll() is not None:break
-                time.sleep(.08)
-        if os.path.exists(audit):
-            result["watchdog_record"]=read_json(audit)
-        result["original_color_verified"]=verify_original()
-        result["accepted_receiver_lock"]=bool(
-            result.get("receiver",{}).get("rc")==0 and
-            "LOCK_CANDIDATE" in result.get("receiver",{}).get("text",""))
-        atomic_json(RESULT,result)
-        print("stage=color_trial final_original_color_restored=%s lock_candidate=%s"
-              " witness=%s"%(
-                result["original_color_verified"],
-                result["accepted_receiver_lock"],RESULT))
-        sys.stdout.flush()
-    return 0 if result["original_color_verified"] else 70
 
 
 def main(argv):
