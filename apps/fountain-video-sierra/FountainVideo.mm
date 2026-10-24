@@ -483,7 +483,7 @@ static NSButton *fcButton(NSRect frame,NSString *title, id target, SEL action) {
     BOOL hardware=self.sourceChoice.indexOfSelectedItem==0;
     self.formatChoice.enabled=hardware;
     if (hardware && self.virtualActive)
-        [self setMessage:@"Optional hardware input selected; press Start to capture."];
+        [self setMessage:@"Blackmagic input suspended after Desktop Video 10.4 frame-release crash. Browser stream remains synthetic."];
 }
 - (void)scratchShareChanged:(id)sender {
     if (self.scratchPublisher)
@@ -536,6 +536,16 @@ static NSButton *fcButton(NSRect frame,NSString *title, id target, SEL action) {
     }
 }
 - (void)startPressed:(id)sender {
+    // A real 1080p30 signal triggered a Desktop Video 10.4 destructor crash
+    // (CDeckLinkVideoInputFrame::Release) on this Sierra host. Preserve the
+    // working output/browser feed unless physical input has deliberately been
+    // re-authorized on an isolated, recovery-verified system.
+    if (self.sourceChoice.indexOfSelectedItem == 0 &&
+        ![[NSUserDefaults standardUserDefaults]
+                 boolForKey:@"FountainVideoAllowLegacyCapture"]) {
+        [self setMessage:@"Blackmagic physical input suspended: driver 10.4 crashed during real frame release. Existing virtual stream kept running."];
+        return;
+    }
     [self finishRecording];
     [self stopCurrent:NO];
     self.autoScanning=NO;
@@ -998,21 +1008,33 @@ static int runWindowSelfTest(void) {
             runUntilDate:[NSDate dateWithTimeIntervalSinceNow:.45]];
         BOOL valid=controller.virtualActive && controller.lastFrame!=nil &&
                    controller.stage.notice==nil && !controller.formatChoice.enabled;
+        BOOL guardVerified=YES;
+        if (![[NSUserDefaults standardUserDefaults]
+                    boolForKey:@"FountainVideoAllowLegacyCapture"]) {
+            [controller.sourceChoice selectItemAtIndex:0];
+            [controller sourceChanged:nil];
+            [controller startPressed:nil];
+            guardVerified=controller.virtualActive &&
+                          !controller.captureActive &&
+                          controller.lastFrame!=nil;
+        }
         [controller stopPressed:nil];
         controller.window.delegate=nil;
         [controller.window orderOut:nil];
         [controller.window close];
         controller.window=nil;
         app.delegate=nil;
-        printf("stage=app_window result=%s virtual_frame=%u\n",
-               valid?"pass":"fail",(unsigned)valid);
+        printf("stage=app_window result=%s virtual_frame=%u"
+               " physical_crash_guard=%u\n",
+               valid&&guardVerified?"pass":"fail",
+               (unsigned)valid,(unsigned)guardVerified);
         /* This CLI test manually pumps a run loop without NSApplication.run.
          * Exit after releasing hardware: draining a synthetic AppKit app's
          * outermost pool is not an application lifecycle test.
          * Normal GUI shutdown is separately verified via Apple Events Quit.
          */
         fflush(stdout);
-        exit(valid?0:46);
+        exit(valid&&guardVerified?0:46);
     }
 }
 static int runAutoScanSelfTest(void) {
