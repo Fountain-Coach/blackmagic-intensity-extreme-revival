@@ -3,8 +3,10 @@
 // Commands:
 //   --preflight-1080p25  : CoreGraphics only; never opens the vendor library.
 //   --preflight-1080p30  : CoreGraphics only; never opens the vendor library.
+//   --preflight-720p60   : CoreGraphics only; never opens the vendor library.
 //   --probe-active-1080p25 : vendor input mode enable/status/disable, no stream.
 //   --probe-active-1080p30 : vendor input mode enable/status/disable, no stream.
+//   --probe-active-720p60  : vendor input mode enable/status/disable, no stream.
 // The probe STRICTLY checks the actual physical BMD display's selected source
 // rate before it arms input. Never changes source display mode or connector.
 // No IDeckLinkInput SetCallback/StartStreams, frame memory, PCI MMIO, or
@@ -47,7 +49,10 @@ static int32_t query(void* obj, const uint8_t raw[16], void** out) {
     return ((Query)(*(void***)obj)[0])(obj,id,out);
 }
 
-static int source_mode_preflight(uint32_t expected_rate, bool must_be_active) {
+static int source_mode_preflight(uint32_t expected_width,
+                                 uint32_t expected_height,
+                                 uint32_t expected_rate,
+                                 bool must_be_active) {
     CGDirectDisplayID ids[16];uint32_t n=0;
     const CGError gr=CGGetOnlineDisplayList(16,ids,&n);
     if (gr!=kCGErrorSuccess || n!=1) {
@@ -74,19 +79,19 @@ static int source_mode_preflight(uint32_t expected_rate, bool must_be_active) {
         for(CFIndex i=0;i<count;i++){
             CGDisplayModeRef m=(CGDisplayModeRef)CFArrayGetValueAtIndex(modes,i);
             double r=CGDisplayModeGetRefreshRate(m);
-            if(CGDisplayModeGetWidth(m)==1920 && CGDisplayModeGetHeight(m)==1080
+            if(CGDisplayModeGetWidth(m)==expected_width && CGDisplayModeGetHeight(m)==expected_height
                && r>expected_rate-0.01 && r<expected_rate+0.01) available=true;
         }
         CFRelease(modes);
     }
-    bool active_match=(w==1920 && h==1080 &&
+    bool active_match=(w==expected_width && h==expected_height &&
                        refresh>expected_rate-0.01 &&
                        refresh<expected_rate+0.01);
     printf("stage=source result=BMD_HDMI active_width=%zu active_height=%zu"
-           " selected_rate_hz=%.6f required_rate_hz=%u"
+           " selected_rate_hz=%.6f required_width=%u required_height=%u required_rate_hz=%u"
            " mode_advertised=%u active_mode_match=%u"
            " cg_display_only=1 mode_changes=0\n",
-           w,h,refresh,expected_rate,available?1u:0u,
+           w,h,refresh,expected_width,expected_height,expected_rate,available?1u:0u,
            active_match?1u:0u);
     if(!available) return 24;
     if(must_be_active && !active_match) {
@@ -108,22 +113,26 @@ int main(int argc,char** argv) {
     }
     if(argc!=2) {
         puts("usage: lock-probe --preflight-1080p25|--preflight-1080p30"
-             "|--probe-active-1080p25|--probe-active-1080p30");
+             "|--preflight-720p60|--probe-active-1080p25|--probe-active-1080p30|--probe-active-720p60");
         return 64;
     }
     bool preflight=false,probe=false;
-    uint32_t rate=0,mode=0;
+    uint32_t rate=0,mode=0,width=1920,height=1080;
     if(!strcmp(argv[1],"--preflight-1080p25")){
         preflight=true;rate=25;
     }else if(!strcmp(argv[1],"--preflight-1080p30")){
         preflight=true;rate=30;
+    }else if(!strcmp(argv[1],"--preflight-720p60")){
+        preflight=true;rate=60;width=1280;height=720;
     }else if(!strcmp(argv[1],"--probe-active-1080p25")){
         probe=true;rate=25;mode=0x48703235u;
     }else if(!strcmp(argv[1],"--probe-active-1080p30")){
         probe=true;rate=30;mode=0x48703330u;
+    }else if(!strcmp(argv[1],"--probe-active-720p60")){
+        probe=true;rate=60;mode=0x68703630u;width=1280;height=720;
     }else return 64;
 
-    const int gate=source_mode_preflight(rate,probe);
+    const int gate=source_mode_preflight(width,height,rate,probe);
     if(gate) return gate;
     if(preflight){
         puts("stage=preflight result=pass display_modified=0"
@@ -161,7 +170,7 @@ int main(int argc,char** argv) {
     if(rc||!status){result=46;goto cleanup;}
     rc=((Enable)(*(void***)input)[6])(input,mode,0x32767579u,0);
     printf("stage=enable_input mode=%up pixel_buffer=2vuy rc=0x%08x\n",
-           rate,(unsigned)rc);
+           rate==60?"720p60":(rate==30?"1080p30":"1080p25"),(unsigned)rc);
     fflush(stdout);
     if(rc){result=47;goto cleanup;}
     enabled=true;
