@@ -58,7 +58,8 @@ class VirtualLabHTTPTests(unittest.TestCase):
         code, html, h = self.req("/lab")
         self.assertEqual(code, 200)
         self.assertIn(b"SIMULATED ONLY", html)
-        self.assertIn(b"input/output", html)
+        self.assertIn(b"Input / virtual receiver", html)
+        self.assertIn(b"Output / virtual transmitter", html)
         self.assertEqual(h.get("X-Fountain-Simulation"), "true")
 
     def test_capabilities_are_explicitly_virtual(self):
