@@ -59,8 +59,7 @@ static int32_t fake_time(void *p, int64_t *t, int64_t *d, int64_t scale) {
 }
 static void *fakeVtable[13];
 
-static Observer make_observer(void) {
-    Observer state;
+static void initialize_observer(Observer &state) {
     state.vtable=callbackTable;
     state.refs.store(1);
     state.frames.store(0);
@@ -76,7 +75,6 @@ static Observer make_observer(void) {
     state.firstFrameTimeOk.store(0);
     state.firstFrameTime.store(0);
     state.firstFrameDuration.store(0);
-    return state;
 }
 static uint32_t fnv32(const unsigned char *pixels, size_t count) {
     uint32_t hash=2166136261u;
@@ -115,7 +113,8 @@ int main(void) {
     fakeVtable[8]=(void*)fake_bytes;
     fakeVtable[11]=(void*)fake_time;
 
-    Observer s=make_observer();
+    Observer s;
+    initialize_observer(s);
     void *out=nullptr;
     CFUUIDBytes iid;
     memcpy(&iid,callbackIID,sizeof(iid));
