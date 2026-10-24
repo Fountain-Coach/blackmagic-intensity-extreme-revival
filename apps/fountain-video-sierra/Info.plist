@@ -13,4 +13,9 @@
 <key>NSHighResolutionCapable</key><true/>
 <key>LSApplicationCategoryType</key><string>public.app-category.video</string>
 <key>NSPrincipalClass</key><string>NSApplication</string>
+<!-- Permit configured trusted .local URLs for private video uplink.
+     No public network source is configured by this application. -->
+<key>NSAppTransportSecurity</key><dict>
+  <key>NSAllowsLocalNetworking</key><true/>
+</dict>
 </dict></plist>
