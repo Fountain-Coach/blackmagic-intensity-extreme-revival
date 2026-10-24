@@ -316,10 +316,11 @@ int main(int argc,const char**argv) {
             NSString *hash=digest(rgba);
             if(!firstHash)firstHash=hash;lastHash=hash;
             BOOL acceptable=YES;
-            if(selfTest) {
-                NSString *name=[NSString stringWithFormat:@"fixture-%u.png",frame];
-                acceptable=savePrivatePNG(image,name);
-            }
+            // Synthetic smoke testing is deliberately memory-only. The
+            // window/frame hash changes are the witness; no screenshots saved.
+            // In particular never collide with private fixture-0/1 PNGs left
+            // by an older run.
+            if(selfTest)acceptable=YES;
             if(snap)acceptable=savePrivatePNG(image,filename);
             if(server)acceptable=publish(image,gl,server);
             printf("stage=window_frame seq=%u source_pid=%lu window_id=%lu "
@@ -327,7 +328,7 @@ int main(int argc,const char**argv) {
                    frame,(unsigned long)owner,(unsigned long)win,
                    CGImageGetWidth(image),CGImageGetHeight(image),hasRect?1:0,
                    hash.UTF8String,(server&&acceptable)?1:0,
-                   ((snap||selfTest)&&acceptable)?1:0);
+                   (snap&&acceptable)?1:0);
             CGImageRelease(image);
             if(!acceptable)break;
             ++okFrames;
@@ -337,7 +338,7 @@ int main(int argc,const char**argv) {
         [server stop];
         if(testWindow)[testWindow close];
         if(selfTest && okFrames==2 && ![firstHash isEqualToString:lastHash]) {
-            puts("stage=fixture_acceptance result=PASS distinct_frames=2 private_pngs=2 "
+            puts("stage=fixture_acceptance result=PASS distinct_frames=2 private_pngs=0 "
                  "blackmagic_touched=0 desktop_captured=0 network=0");
             return 0;
         }
