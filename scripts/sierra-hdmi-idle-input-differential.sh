@@ -7,11 +7,13 @@ ROOT=/Volumes/Fresh/FountainVideoDockerLab
 if [ -n "$(printenv SILVER_VIDEO_GUEST_HOME)" ]; then ROOT="$(printenv SILVER_VIDEO_GUEST_HOME)"; fi
 APP="$HOME/Applications/Fountain Video.app"
 SRC="$ROOT/src/decklink-fixed-silver-output-default-input-differential.cpp"
+CAPSRC="$ROOT/src/decklink-original-input-mux-capabilities-readonly.cpp"
 BIN="$ROOT/bin/fc-fixed-silver-idle-input-differential"
+CAPBIN="$ROOT/bin/fc-original-input-mux-caps"
 LAB="$ROOT/private-roundtrip"
 action=--check
 if [ $# -gt 0 ]; then action=$1; fi
-case "$action" in --prepare|--check|--run) ;; *) echo "usage: $0 --prepare|--check|--run" >&2; exit 64;; esac
+case "$action" in --prepare|--check|--run|--capabilities) ;; *) echo "usage: $0 --prepare|--check|--run" >&2; exit 64;; esac
 if [ "$(uname -s)" != Darwin ] ||
    [ "$(sw_vers -productVersion)" != 10.12.6 ] ||
    [ "$(sysctl -n hw.model)" != Macmini5,3 ]; then
@@ -26,15 +28,18 @@ system_profiler SPDisplaysDataType | grep -A3 'BMD HDMI:' |
 }
 test -d "$APP" || { echo "stage=idle_input_differential result=APP_MISSING"; exit 23; }
 test -r "$SRC" || { echo "stage=idle_input_differential result=SOURCE_MISSING"; exit 24; }
+test -r "$CAPSRC" || { echo "stage=idle_input_differential result=CAPABILITY_SOURCE_MISSING"; exit 24; }
 if [ "$action" = --prepare ]; then
   mkdir -p "$ROOT/bin"
   clang++ -std=c++11 -Wall -Wextra -Werror -O1 \
     "$SRC" -framework CoreFoundation -framework CoreGraphics -o "$BIN" || exit 25
-  chmod 700 "$BIN"
+  clang++ -std=c++11 -Wall -Wextra -Werror -O1 \
+    "$CAPSRC" -framework CoreFoundation -o "$CAPBIN" || exit 25
+  chmod 700 "$BIN" "$CAPBIN"
   echo "stage=idle_input_differential result=PREPARED no_device_changes=1"
   exit 0
 fi
-test -x "$BIN" || { echo "stage=idle_input_differential result=NOT_PREPARED"; exit 26; }
+test -x "$BIN" && test -x "$CAPBIN" || { echo "stage=idle_input_differential result=NOT_PREPARED"; exit 26; }
 echo "stage=idle_input_differential result=CHECKED no_device_changes=1"
 [ "$action" = --check ] && exit 0
 if pgrep -f '/Black Syphon.app/Contents/MacOS/' >/dev/null 2>&1 ||
@@ -78,7 +83,11 @@ if pgrep -f "^$GUIEXE$" >/dev/null 2>&1; then
   echo "stage=idle_input_differential result=GUI_STILL_RUNNING" >&2; exit 33
 fi
 echo "stage=idle_input_differential action=START log=$LOG"
-"$BIN" --compare-volatile-idle-standards >"$LOG" 2>&1
+if [ "$action" = --capabilities ]; then
+  "$CAPBIN" --read-only >"$LOG" 2>&1
+else
+  "$BIN" --compare-volatile-idle-standards >"$LOG" 2>&1
+fi
 result=$?
 cat "$LOG"
 echo "stage=idle_input_differential action=COMPLETE exit=$result"
