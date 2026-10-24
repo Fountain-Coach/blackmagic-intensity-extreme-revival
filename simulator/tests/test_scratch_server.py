@@ -82,6 +82,25 @@ class ScratchRingTests(unittest.TestCase):
         self.assertEqual(state["latest"]["origin"],"decklink-observed")
         self.assertFalse(state["hardware_hdmi_capture_accepted"])
 
+    def test_late_packet_is_rejected_without_flushing_history(self):
+        ring=ScratchHistory(clock=lambda:100)
+        ring.push(JPEG, 2_000_000_000, "synthetic",4,2,"session-A")
+        ring.push(JPEG, 2_200_000_000, "synthetic",4,2,"session-A")
+        with self.assertRaisesRegex(InvalidFrame,"OUT_OF_ORDER_FRAME"):
+            ring.push(JPEG,2_100_000_000,"synthetic",4,2,"session-A")
+        self.assertEqual(ring.snapshot()["count"],2)
+        self.assertEqual(ring.snapshot()["stream_epoch"],0)
+
+    def test_new_source_session_makes_clean_epoch(self):
+        ring=ScratchHistory(clock=lambda:100)
+        ring.push(JPEG, 200_000_000, "synthetic",4,2,"session-A")
+        ring.push(JPEG, 0, "synthetic",4,2,"session-B")
+        snap=ring.snapshot()
+        self.assertEqual(snap["stream_epoch"],1)
+        self.assertEqual(snap["epoch_reason"],"stream_session_changed")
+        self.assertEqual(snap["count"],1)
+        self.assertEqual(snap["latest"]["stream_id"],"session-B")
+
     def test_online_timeout_is_explicit(self):
         current=[0]
         ring=ScratchHistory(clock=lambda:current[0])
