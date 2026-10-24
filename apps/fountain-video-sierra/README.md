@@ -6,6 +6,20 @@
 
 ## Browser Scratch integration
 
+## Legacy Sierra capture crash containment (24 October 2026)
+
+The physical 1080p30 HDMI loopback from the silver Mac mini established BMD HDMI monitor identification but crashed during the installed 2015-era Desktop Video 10.4 runtime's input-frame destructor. This was a **real hardware attempt that failed**, distinct from the working virtual browser path.
+
+Fountain Video now **keeps the current synthetic/browser source running** if someone chooses Blackmagic HDMI input and presses Start while the known-crashing legacy input path is suspended. There is no popup, driver change, system restart or privileged call. The AppKit window test explicitly verifies this (physical_crash_guard=1), and native JPEG/browser synthetic streaming still works.
+
+The single reversible user-default name is FountainVideoAllowLegacyCapture, deliberately false when absent. A controlled, isolated physical test on a boot-recoverable environment may explicitly enable that preference, but **do not do so on the existing Sierra boot merely to repeat the crash**.
+
+Safe on-host test, requiring no external video:
+
+    sh scripts/sierra-hdmi-loopback-preflight.sh
+
+Run it from the repository root. It checks active BMD HDMI EDID and changing Mac framebuffer pixels; the real observer callback against a source-owned fake DeckLink frame; the original installed Blackmagic driver and the retained vendor crash record. [Full witness report](../../tests/2026-10-24-hdmi-output-framebuffer-and-frame-lifetime-triage.md). A passed preflight **does not** mean that receiver input lock or captured pixels have been achieved.
+
 The actual Sierra application now includes a **Browser scratch…** button and **Stream frames to private browser** checkbox. Its source-neutral frame path converts both generated video and optional DeckLink-received YUV frames into preview images, then uses [FCScratchPublisher](FCScratchPublisher.mm) for token-protected, bounded, single-flight JPEG uploads to the Ubuntu receiver. The user-owned application does not launch the receiver itself.
 
 **[Browser Scratch](http://192.168.8.50:8273/scratch)** runs on the trusted WLAN. It supports a rolling 144-frame cache, reverse/forward shuttle, freeze, jog dragging and return to live. The [full design and security boundary](../../docs/hdmi-to-browser-stream-and-scratch.md) explains how source-provenance, stream epochs and media acceptance remain separate. The app starts in **synthetic source mode**, so the Nikon can remain off. The physical DeckLink-to-browser branch is implemented but has not received a verified real HDMI frame.
