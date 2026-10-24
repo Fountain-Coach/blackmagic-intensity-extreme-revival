@@ -146,6 +146,8 @@ def watchdog(lease,ready,audit):
 
 
 def run_trial():
+    # Even direct module calls may not re-run the invalid experiment.
+    raise RuntimeError("IOGraphics_RGB_rewrite_blocks_422_trials")
     baseline=preflight()
     root=tempfile.mkdtemp(prefix="fc-bmd-color-trial-")
     lease=os.path.join(root,"lease.json")
@@ -234,7 +236,10 @@ def main(argv):
         print("stage=color_trial external_restore=%s"%v["verified"])
         return 0 if v["verified"] else 32
     if argv==["--trial-422"]:
-        return run_trial()
+        print("stage=color_trial result=BLOCKED_IOGRAPHICS_RGB_REWRITE"
+              " no_source_change=1 no_vendor_calls=1"
+              " restore_only_remains_available=1")
+        return 65
     if len(argv)==4 and argv[0]=="--watchdog":
         return watchdog(argv[1],argv[2],argv[3])
     print("usage: --preflight|--restore-only|--trial-422")
