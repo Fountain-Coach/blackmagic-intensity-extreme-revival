@@ -56,13 +56,19 @@ read_slot=0x7a0
 read_method=HDProPCIExpress::ReadRegisterEndian
 write_slot=0x7a8
 write_method=HDProPCIExpress::WriteRegisterEndian
+firmware_version_slot=0x340
+firmware_version_method=HDProPCIExpress::getFirmwareVersion
+expected_firmware_version=0xb
+live_firmware_version_observed=false
 hardware_access=false
 runtime_class_verified=false
 
-Ran 10 tests ... OK
+Ran 12 tests ... OK
 dispatch_suite_exit=0
 ```
 
-A first test run failed because the newly added test did not set up its sibling Python module path; that harness defect was corrected and the complete ten-test suite then passed. It did not affect the authenticated private-binary verification.
+A first test run failed because the newly added test did not set up its sibling Python module path; that harness defect was corrected, and the expanded **twelve-test suite** then passed. The added cases verify the firmware method slot and model-version table on synthetic Mach-O data. It did not affect the authenticated private-binary verification.
+
+A final 24 October read-only machine check confirmed both original Blackmagic 10.4 kernel modules remained loaded, our independent driver was not loaded, and the crash-prone CoreMediaIO plug-in remained isolated. The firmware register value was not queried live.
 
 **All results are software/ABI evidence**; no code accessed a PCI device BAR or initiated video DMA. The original Blackmagic vendor drivers continue to own the hardware. See [A124 status-register evidence](../docs/a124-input-status-call-chain-2026-10-24.md).
