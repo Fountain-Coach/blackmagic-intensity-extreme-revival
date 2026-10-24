@@ -22,6 +22,7 @@ typedef uint32_t (*GetModeCode)(void*);
 typedef long (*GetDimension)(void*);
 typedef int32_t (*GetFrameRate)(void*, int64_t*, int64_t*);
 typedef int32_t (*GetAttributeInt)(void*, uint32_t, int64_t*);
+typedef int32_t (*GetAttributeFlag)(void*, uint32_t, bool*);
 typedef int32_t (*DoesSupportVideoMode)(void*, uint32_t, uint32_t, uint32_t, uint32_t*, void**);
 typedef int32_t (*EnableVideoInput)(void*,uint32_t,uint32_t,uint32_t);
 typedef int32_t (*DisableVideoInput)(void*);
@@ -43,6 +44,14 @@ static void probeAttributes(void* device) {
     if (!attributes) return;
     void** table = *(void***)attributes;
     GetAttributeInt getInt = (GetAttributeInt)table[4];
+    GetAttributeFlag getFlag = (GetAttributeFlag)table[3];
+    // Original 10.4 hardware capability, queried read-only. The SDK documents
+    // detected input mode as available only for devices with format detection.
+    bool inputFormatDetection = false;
+    int32_t detectionStatus = getFlag(attributes, 0x696e6664U, &inputFormatDetection);
+    printf("stage=attribute_flag name=input_format_detection status=0x%08x supported=%d\n",
+           (unsigned)detectionStatus, detectionStatus==0?int(inputFormatDetection):-1);
+
     struct Key { const char* name; uint32_t id; };
     const Key keys[] = {
         {"video_io_support", 0x76696f73},
