@@ -123,6 +123,12 @@ def main():
     parser.add_argument("--port", type=int, default=8273)
     args = parser.parse_args()
     token = os.environ.get("FOUNTAIN_SCRATCH_INGEST_TOKEN", "")
+    if not token:
+        secret = Path.home() / ".config" / "fountain-video" / "scratch-ingest-token"
+        try:
+            token = secret.read_text(encoding="ascii").strip()
+        except OSError:
+            token = ""
     try:
         server = ScratchServer((args.host, args.port), token)
     except ValueError as e:
