@@ -75,4 +75,31 @@ The original **Blackmagic Intensity Extreme** is a Thunderbolt bus-powered endpo
 
 The current Sierra Thunderbolt inventory says for the **THUNDERDOCK2 downstream Port**: `Status: No device connected`. Given the fixed single-Thunderbolt-port 2011 silver Mac, a downstream bus-powered Intensity Extreme would have to enumerate beyond the dock. Its absence together with the missing PCI `BDBD:A124` is consistent with loss of the downstream Thunderbolt link or bus power, **not proof of a failed HDMI decoder**. It remains unverified which exact Thunderbolt cable the operator unplugged and reconnected.
 
-**Next most discriminating physical observation:** without substituting any HDMI source or moving the existing HDMI cables, verify the **dock-to-Intensity Thunderbolt cable is fully seated at both ends**, the original Intensity's own power/LED state (if visible), and that the dock has its specified AC adapter connection. Check inventory again after any deliberate physical inspection. Do not remote-reboot the silver, change driver/kernel, or reset firmware to compensate for an absent downstream Thunderbolt endpoint. If physical handling is necessary, avoid hot-unplugging a dock carrying active storage; first ensure safe shutdown of dependent workflows.
+**Operator clarification at 17:46 CEST:** All existing physical connections are connected and the fixed fixture is final. Do not repeatedly ask for cable reseating. The then-open uncertainty was electrical link/power negotiation or endpoint enumeration, *not* whether the operator completed the wiring. A controlled Sierra restart was subsequently authorized and executed; see the post-restart witness below. Continue not to change the existing HDMI fixture, kernel, firmware, or drivers.
+
+
+## Controlled Sierra restart — executed, verified, and unsuccessful at restoring Blackmagic (18:04:31 CEST)
+
+The operator authorized a Sierra restart as the next reversible recovery test, without any operating-system reinstall, driver replacement, new HDMI source or recabling.
+
+**Preflight and guest handling.**
+- Remote control confirmed the exact 2011 silver Macmini5,3, Sierra 10.12.6, original internal SATA Fresh volume, Wi-Fi SSH route independent of the dock, FileVault OFF and AC power.
+- One offline **xhyve Alpine Linux/Docker guest** was running with persistent 12,884,901,888-byte docker-guest.raw and private 4,194,304-byte fountain-hdmi-mailbox.raw. The guest's serial console was unresponsive to a bounded clean poweroff attempt. **Clean Linux shutdown is not witnessed.**
+- The mailbox was copied privately and its original/backup SHA-256 **agreed**: 96051895b40b1a3351c0bc1bd6092c770b7e39f841b92c9db16e2e871297e829. Existing mailbox frame provenance and guest disk preserved.
+- A private gzip-compressed recovery copy of the 12 GiB virtual disk was created at /Volumes/Fresh/FountainVideoDockerLab/private-restart-20261024/docker-guest.raw.gz; its completed size was **797,087,705 bytes**, file permissions **0600**. gzip -t passed (exit 0). Compressed archive SHA-256 verified before and after reboot: 41c5212e3d6123a063c04f3c67bf5c6024bc11748f3b6fe928d5cbffdb391b4d.
+- An attempted full original-vs-decompressed-disk SHA-256 equality pass was **interrupted** by a concurrent remote command before acceptance; the original guest disk's on-host modification timestamp remained **15:18:54 CEST** throughout checks. Do **not** call the recovery archive independently proven byte-identical or the guest filesystem clean. It is a gzip-integrity-checked, *crash-consistent recovery copy*, not an application-consistent Linux backup. The unmodified original remains primary.
+- The xhyve host process ultimately exited after SIGTERM; no xhyve process held its raw disk when Sierra restarted. No forced physical power cut or guest autostart.
+
+**Reboot and independent system boot evidence.**
+- A regular Sierra GUI restart (AppleScript / System Events) was initiated from the authorized remote Mac. SSH disappeared and subsequently returned.
+- Original kernel boot time: **2026-10-22 05:58:59 CEST** (kern.boottime seconds 1792641539).
+- New kern.boottime: **2026-10-24 18:04:31 CEST** (seconds 1792857871, verified at 18:05:49), machine uptime ~1 minute. This is **a full kernel/Thunderbolt reboot**, not merely a GUI logout.
+- SPThunderboltDataType: the **Comdis THUNDERDOCK2** re-enumerated (upstream link 0x2), but its **downstream Thunderbolt port still shows Status: No device connected, Link Status: 0x7**.
+- SPPCIDataType: the dock's USB controller **1b73:1100** and Ethernet controller **8086:1533** enumerate, but original Blackmagic **BDBD:A124 remains absent**.
+- The original Desktop Video **10.4 framebuffer kext** appeared in kextstat, while the core Blackmagic device driver did **not** appear in that postboot output; driver loading alone cannot make the missing PCI device physically present.
+- SPDisplaysDataType showed no active BMD HDMI sink. In the just-rebooted headless login state, missing display rows should not be interpreted independently as a receiver diagnosis; the PCI absence is decisive.
+- The Alpine guest remains **stopped** (pgrep -x xhyve found no process after reboot). Original guest disk and mailbox retain their correct sizes and 0600 permissions, and the separate private recovery archive survived reboot with unchanged SHA.
+
+**Verdict: RESTART EXECUTED; HARDWARE NOT RECOVERED.** The silver remains the canonical Sierra host, the dock is electrically/live enumerable, but its bus-powered downstream Blackmagic Intensity Extreme has not reappeared. No input-lock, capture, or HDMI output test was attempted postboot. The original NO_BLACKMAGIC_PCI_DEVICE gate remains the correct block, and PR #10 stays **DRAFT**.
+
+**Next discriminating boundary:** examine downstream Thunderbolt bus-power/link training and the Blackmagic endpoint's actual power state independently, *without* repeating basic "everything connected" checks. A further Sierra reboot, software reinstall, kernel driver reset or video-mode experiment is **not** justified by this outcome. The host-side simulator and historical 17-frame delivery evidence are preserved and can be developed independently.
