@@ -81,10 +81,21 @@ int main(void) {
     assert(f.seen_offsets[0]==0x40);
     assert(r.firmware==FC_FIRMWARE_COMPARISON_SKIPPED);
 
+    FCInputStatusGates ig=ing();
+    ig.feature_1eb=0;
+    f=(struct Fixture){0x0b,0x1,-1,0,{0,0}};
+    r=fc_evaluate_a124_read_contract(mock_read32,&f,fwg(),ig);
+    assert(r.state==FC_READ_CONTRACT_GUARDS_CLOSED && f.reads==1);
+
+    ig=ing(); ig.guard_28b=1;
+    f=(struct Fixture){0x0b,0x1,-1,0,{0,0}};
+    r=fc_evaluate_a124_read_contract(mock_read32,&f,fwg(),ig);
+    assert(r.state==FC_READ_CONTRACT_GUARDS_CLOSED && f.reads==1);
+
     f=(struct Fixture){0x0b,0x1,-1,0,{0,0}};
     r=fc_evaluate_a124_read_contract(NULL,&f,fwg(),ing());
     assert(r.state==FC_READ_CONTRACT_INVALID && f.reads==0);
 
-    printf("stage=read_contract result=pass cases=10 hardware_access=0\n");
+    printf("stage=read_contract result=pass cases=12 hardware_access=0\n");
     return 0;
 }
