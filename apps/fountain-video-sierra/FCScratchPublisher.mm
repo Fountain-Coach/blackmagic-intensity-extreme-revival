@@ -3,6 +3,7 @@
 @implementation FCScratchPublisher {
     NSURL *_endpoint;
     NSString *_token;
+    NSString *_streamId;
     NSURLSession *_session;
     NSTimeInterval _lastSend;
     NSUInteger _outstanding;
@@ -22,6 +23,7 @@
     }
     _endpoint = [endpoint copy];
     _token = [token copy];
+    _streamId = [[NSUUID UUID] UUIDString];
     _enabled = YES;
     _lastSend = -1;
     NSURLSessionConfiguration *config =
@@ -84,7 +86,7 @@
     // This method is called from the AppKit main thread. Do not accumulate
     // background uploads if WLAN delivery becomes slow.
     NSTimeInterval now=[NSDate timeIntervalSinceReferenceDate];
-    if (_outstanding>=2 || (_lastSend>=0 && now-_lastSend<0.17)) return;
+    if (_outstanding>=1 || (_lastSend>=0 && now-_lastSend<0.17)) return;
     _lastSend=now;
     NSUInteger width=0,height=0;
     NSData *jpeg=[FCScratchPublisher jpegPreviewForImage:image
@@ -99,6 +101,7 @@
     [request setValue:[NSString stringWithFormat:@"%lld",(long long)ptsNs]
       forHTTPHeaderField:@"X-Fountain-PTS-Ns"];
     [request setValue:origin forHTTPHeaderField:@"X-Fountain-Origin"];
+    [request setValue:_streamId forHTTPHeaderField:@"X-Fountain-Stream-ID"];
     [request setValue:[NSString stringWithFormat:@"%lu",(unsigned long)width]
       forHTTPHeaderField:@"X-Fountain-Width"];
     [request setValue:[NSString stringWithFormat:@"%lu",(unsigned long)height]
