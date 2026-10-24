@@ -262,6 +262,9 @@ static void* kCallbackVtable[5] = {
 @property(nonatomic,assign) NSUInteger lastHeight;
 @property(nonatomic,assign) BOOL captureActive;
 @property(nonatomic,assign) BOOL virtualActive;
+@property(nonatomic,assign) BOOL autoScanning;
+@property(nonatomic,assign) NSInteger autoModeIndex;
+@property(nonatomic,assign) NSTimeInterval autoModeStarted;
 @property(nonatomic,assign) uint32_t virtualFrame;
 @property(nonatomic,assign) BOOL recordRequested;
 @property(nonatomic,strong) NSURL *recordURL;
@@ -345,8 +348,9 @@ static NSButton *fcButton(NSRect frame,NSString *title, id target, SEL action) {
                             @"Capture format",13,muted,NO)];
     self.formatChoice=[[NSPopUpButton alloc] initWithFrame:NSMakeRect(818,441,276,32)
                                                  pullsDown:NO];
-    [self.formatChoice addItemsWithTitles:@[@"1080p30",@"1080p25",
-                                             @"720p60",@"720p50"]];
+    [self.formatChoice addItemsWithTitles:@[@"Auto · scan 4 formats",
+                                            @"1080p30",@"1080p25",
+                                            @"720p60",@"720p50"]];
     [root addSubview:self.formatChoice];
     self.startButton=fcButton(NSMakeRect(818,389,131,36),@"Start",[self class],
                                @selector(startPressed:));
@@ -437,7 +441,9 @@ static NSButton *fcButton(NSRect frame,NSString *title, id target, SEL action) {
     }
 }
 - (void)startPressed:(id)sender {
+    [self finishRecording];
     [self stopCurrent:NO];
+    self.autoScanning=NO;
     self.lastFrame=nil;
     self.lastRGBA=nil;
     self.stage.frameImage=nil;
@@ -452,8 +458,14 @@ static NSButton *fcButton(NSRect frame,NSString *title, id target, SEL action) {
         [self tick:nil];
         return;
     }
+    self.autoScanning=self.formatChoice.indexOfSelectedItem==0;
+    self.autoModeIndex=self.autoScanning ? 0 :
+                       self.formatChoice.indexOfSelectedItem-1;
+    [self beginHardwareMode:self.autoModeIndex];
+}
+- (void)beginHardwareMode:(NSInteger)modeIndex {
     self.stage.synthetic=NO;
-    _selectedMode=modeCode(self.formatChoice.indexOfSelectedItem);
+    _selectedMode=modeCode(modeIndex);
     if (![self openDevice] || !_selectedMode) {
         self.stage.notice=@"DEVICE NOT AVAILABLE";
         [self setMessage:@"Blackmagic device unavailable."];
@@ -490,8 +502,14 @@ static NSButton *fcButton(NSRect frame,NSString *title, id target, SEL action) {
                             @"Cannot start capture (0x%08x).",(unsigned)rc]];
         [self stopCurrent:NO]; return;
     }
+    self.autoModeStarted=[NSDate timeIntervalSinceReferenceDate];
     self.stage.notice=@"WAITING FOR HDMI SIGNAL";
-    [self setMessage:@"Capture running · checking for live frames"];
+    if (self.autoScanning) {
+        [self setMessage:[NSString stringWithFormat:
+                  @"Scanning HDMI · format %ld of 4",(long)(modeIndex+1)]];
+    } else {
+        [self setMessage:@"Capture running · checking for live frames"];
+    }
     self.statusTimer=[NSTimer scheduledTimerWithTimeInterval:.5 target:self
                                selector:@selector(tick:) userInfo:nil repeats:YES];
     [self tick:nil];
@@ -512,6 +530,7 @@ static NSButton *fcButton(NSRect frame,NSString *title, id target, SEL action) {
     if (showStatus) [self setMessage:@"Stopped · device remains available"];
 }
 - (void)stopPressed:(id)sender {
+    self.autoScanning=NO;
     [self stopCurrent:YES];
     [self finishRecording];
     self.stage.notice=self.lastFrame?nil:@"STOPPED";
@@ -537,9 +556,29 @@ static NSButton *fcButton(NSRect frame,NSString *title, id target, SEL action) {
     self.frameDetails.stringValue=[NSString stringWithFormat:
         @"Callbacks %llu  ·  Valid %llu  ·  No source %llu  ·  Lock %@",
         frames,valid,noSource,_hardwareLocked?@"YES":@"NO"];
+    if (self.autoScanning && (valid>0 || _hardwareLocked)) {
+        self.autoScanning=NO;
+        [self setMessage:@"HDMI signal candidate found · receiving selected mode"];
+    } else if (self.autoScanning &&
+               [NSDate timeIntervalSinceReferenceDate]-self.autoModeStarted>=2.7) {
+        if (self.autoModeIndex<3) {
+            NSInteger next=self.autoModeIndex+1;
+            [self stopCurrent:NO];
+            self.autoModeIndex=next;
+            [self beginHardwareMode:next];
+        } else {
+            [self stopCurrent:NO];
+            self.autoScanning=NO;
+            self.stage.notice=@"NO HDMI INPUT SIGNAL";
+            [self setMessage:@"No signal detected in four common capture formats."];
+            [self.stage setNeedsDisplay:YES];
+        }
+        return;
+    }
     if (!valid) {
         self.stage.notice=@"NO HDMI INPUT SIGNAL";
-        [self setMessage:@"Blackmagic connected · waiting for a real source"];
+        if (!self.autoScanning)
+            [self setMessage:@"Blackmagic connected · waiting for a real source"];
         [self.stage setNeedsDisplay:YES];
     } else {
         [self setMessage:@"Real video frame received"];
