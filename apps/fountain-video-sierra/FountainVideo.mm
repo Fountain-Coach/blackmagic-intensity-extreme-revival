@@ -9,6 +9,7 @@
  * Copyright (c) 2026 Fountain Coach contributors. MIT.
  */
 #import <Cocoa/Cocoa.h>
+#import "FCScratchPublisher.h"
 #import <AVFoundation/AVFoundation.h>
 #import <CoreVideo/CoreVideo.h>
 #import <CoreMedia/CoreMedia.h>
@@ -261,6 +262,8 @@ static void* kCallbackVtable[5] = {
 @property(nonatomic,strong) NSTextField *deviceDetails;
 @property(nonatomic,strong) NSTextField *frameDetails;
 @property(nonatomic,strong) NSTextField *recordLabel;
+@property(nonatomic,strong) NSButton *scratchShareToggle;
+@property(nonatomic,strong) FCScratchPublisher *scratchPublisher;
 @property(nonatomic,strong) NSPopUpButton *sourceChoice;
 @property(nonatomic,strong) NSPopUpButton *formatChoice;
 @property(nonatomic,strong) NSButton *startButton;
@@ -400,12 +403,21 @@ static NSButton *fcButton(NSRect frame,NSString *title, id target, SEL action) {
     self.deviceDetails.lineBreakMode=NSLineBreakByWordWrapping;
     self.deviceDetails.cell.wraps=YES;
     [root addSubview:self.deviceDetails];
-    NSButton *refresh=fcButton(NSMakeRect(818,50,132,36),
-                         @"Refresh hardware",self,@selector(refreshPressed:));
-    [root addSubview:refresh];
+    NSButton *scratch=fcButton(NSMakeRect(818,50,132,36),
+                         @"Browser scratch…",self,@selector(openBrowserScratch:));
+    [root addSubview:scratch];
     NSButton *lab=fcButton(NSMakeRect(958,50,136,36),
-                         @"Software lab…",self,@selector(openSoftwareLab:));
+                         @"Video lab…",self,@selector(openSoftwareLab:));
     [root addSubview:lab];
+    self.scratchShareToggle=[[NSButton alloc]
+                      initWithFrame:NSMakeRect(818,12,277,30)];
+    [self.scratchShareToggle setButtonType:NSButtonTypeSwitch];
+    self.scratchShareToggle.title=@"Stream frames to private browser";
+    self.scratchShareToggle.font=[NSFont systemFontOfSize:11];
+    self.scratchShareToggle.target=self;
+    self.scratchShareToggle.action=@selector(scratchShareChanged:);
+    [self.scratchShareToggle setState:NSControlStateValueOn];
+    [root addSubview:self.scratchShareToggle];
     [root addSubview:fcLabel(NSMakeRect(28,32,755,58),
      @"Software simulation starts without a camera or HDMI. Open Software lab for the full\nvirtual input/output test circuit. Real hardware capture remains an optional adapter.",
                              12,muted,NO)];
@@ -456,6 +468,27 @@ static NSButton *fcButton(NSRect frame,NSString *title, id target, SEL action) {
     self.formatChoice.enabled=hardware;
     if (hardware && self.virtualActive)
         [self setMessage:@"Optional hardware input selected; press Start to capture."];
+}
+- (void)scratchShareChanged:(id)sender {
+    if (self.scratchPublisher)
+        self.scratchPublisher.enabled =
+            self.scratchShareToggle.state==NSControlStateValueOn;
+}
+- (void)openBrowserScratch:(id)sender {
+    NSString *configured=[[NSUserDefaults standardUserDefaults]
+                            stringForKey:@"FountainVideoScratchPageURL"];
+    if (!configured.length)
+        configured=@"http://127.0.0.1:8273/scratch";
+    NSURL *url=[NSURL URLWithString:configured];
+    if (!url || (![url.scheme isEqualToString:@"http"] &&
+                 ![url.scheme isEqualToString:@"https"])) {
+        [self setMessage:@"Browser Scratch URL is not configured correctly."];
+        return;
+    }
+    if ([[NSWorkspace sharedWorkspace] openURL:url])
+        [self setMessage:@"Browser scratching opened."];
+    else
+        [self setMessage:@"Browser Scratch service unavailable."];
 }
 - (void)openSoftwareLab:(id)sender {
     NSString *configured=[[NSUserDefaults standardUserDefaults]
@@ -651,6 +684,26 @@ static NSButton *fcButton(NSRect frame,NSString *title, id target, SEL action) {
     self.stage.notice=nil;
     self.stage.synthetic=synthetic;
     [self.stage setNeedsDisplay:YES];
+    // Identical frame-publication path for synthetic and vendor-observed
+    // video. This is user-space, explicitly labeled and never a claim that
+    // HDMI was physically verified by our source-owned driver.
+    if (self.scratchShareToggle.state==NSControlStateValueOn) {
+        if (!self.scratchPublisher) {
+            NSUserDefaults *prefs=[NSUserDefaults standardUserDefaults];
+            NSURL *endpoint=[NSURL URLWithString:
+                [prefs stringForKey:@"FountainVideoScratchEndpoint"]?:@""];
+            NSString *token=[prefs stringForKey:@"FountainVideoScratchToken"];
+            if (token.length>=32)
+                self.scratchPublisher=[[FCScratchPublisher alloc]
+                                  initWithEndpoint:endpoint token:token];
+        }
+        if (self.scratchPublisher) {
+            int64_t ptsNs=(int64_t)((long double)ticks*
+                                    1000000000.0L/30000.0L);
+            [self.scratchPublisher publishImage:img ptsNs:ptsNs
+                            origin:synthetic?@"synthetic":@"decklink-observed"];
+        }
+    }
     if (synthetic) {
         self.frameDetails.stringValue=[NSString stringWithFormat:
            @"Generated test pattern · %lux%lu · synthetic frame %u",
@@ -839,6 +892,30 @@ static NSButton *fcButton(NSRect frame,NSString *title, id target, SEL action) {
 }
 @end
 
+static int runScratchCodecTest(void) {
+    @autoreleasepool {
+        NSData *rgba=virtualBarsRGBA(1280,720,9);
+        NSImage *image=imageFromRGBA(rgba,1280,720);
+        NSUInteger width=0,height=0;
+        NSData *jpeg=[FCScratchPublisher jpegPreviewForImage:image
+                                                  outWidth:&width outHeight:&height];
+        if (!jpeg || width != 640 || height != 360 ||
+            jpeg.length > 1048576 || jpeg.length < 100) {
+            puts("stage=scratch_jpeg result=fail reason=codec");
+            return 51;
+        }
+        NSBitmapImageRep *decoded=[NSBitmapImageRep imageRepWithData:jpeg];
+        if (!decoded || decoded.pixelsWide!=640 || decoded.pixelsHigh!=360) {
+            puts("stage=scratch_jpeg result=fail reason=decode");
+            return 52;
+        }
+        printf("stage=scratch_jpeg result=pass source=synthetic "
+               "width=%lu height=%lu jpeg_bytes=%lu network_access=0\n",
+               (unsigned long)width,(unsigned long)height,
+               (unsigned long)jpeg.length);
+        return 0;
+    }
+}
 static int runSelfTest(void) {
     @autoreleasepool {
         uint8_t yuv[8]={128,235,128,235,128,16,128,16};
@@ -993,6 +1070,8 @@ static int runMovieSelfTest(void) {
     }
 }
 int main(int argc,char **argv) {
+    if (argc==2 && !strcmp(argv[1],"--self-test-scratch"))
+        return runScratchCodecTest();
     if (argc==2 && !strcmp(argv[1],"--self-test-window"))
         return runWindowSelfTest();
     if (argc==2 && !strcmp(argv[1],"--self-test-autoscan"))
@@ -1002,7 +1081,7 @@ int main(int argc,char **argv) {
     if (argc==2 && !strcmp(argv[1],"--self-test")) return runSelfTest();
     if (argc==2 && !strcmp(argv[1],"--probe")) return runDeviceProbe();
     if (argc!=1) {
-        fprintf(stderr,"usage: FountainVideo [--self-test|--self-test-window|--self-test-movie|--self-test-autoscan|--probe]\n");
+        fprintf(stderr,"usage: FountainVideo [--self-test|--self-test-scratch|--self-test-window|--self-test-movie|--self-test-autoscan|--probe]\n");
         return 64;
     }
     @autoreleasepool {
