@@ -949,12 +949,20 @@ static NSButton *fcButton(NSRect frame,NSString *title, id target, SEL action) {
 }
 - (void)applicationDidFinishLaunching:(NSNotification*)notification {
     [self buildWindow];
-    // Software-first. Starting Fountain Video must not enumerate real
-    // capture hardware, require a powered camera or open a DeckLink client.
-    [self.sourceChoice selectItemAtIndex:1];
-    [self sourceChanged:nil];
-    self.deviceDetails.stringValue=@"Software simulation · hardware optional";
-    [self startPressed:nil];
+    // Hardware-first only on the operator's established silver HDMI self-loop.
+    // The strict source-mode gate and lock-before-stream protect other setups.
+    // LAN frame sharing is switched OFF for the private main-display capture.
+    if(fcSilverFixedBMD1080p30()) {
+        [self.sourceChoice selectItemAtIndex:0];
+        [self sourceChanged:nil];
+        self.deviceDetails.stringValue=@"Intensity Extreme · silver HDMI self-loop";
+        [self startPressed:nil];
+    } else {
+        [self.sourceChoice selectItemAtIndex:1];
+        [self sourceChanged:nil];
+        self.deviceDetails.stringValue=@"Software simulation · no verified HDMI loopback";
+        [self startPressed:nil];
+    }
 }
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication*)sender {
     return YES;
