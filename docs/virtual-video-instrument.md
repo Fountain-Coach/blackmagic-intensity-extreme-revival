@@ -1,5 +1,7 @@
 # Virtual Video Instrument — software-first test bench
 
+> **Superseded by the full software video laboratory (24 October 2026).** This page describes the original one-device demonstration and its historical acceptance tests. The [new full laboratory](full-software-video-laboratory.md) runs two independent simulated devices, moves actual generated YUV/PCM packets across their virtual cable, supplies format-change and failure-recovery testing, and exports raw synthetic media. The Nikon and Blackmagic hardware are no longer required for this software development lane.
+
 **Status (21 October 2026): implemented and regression-tested.** This is a *software simulation*, not an emulated Blackmagic driver or an electrical HDMI source. It is deliberately useful without owning additional test equipment.
 
 ## Purpose
