@@ -155,7 +155,7 @@ int main(int argc,char** argv) {
             accepted=false;goto cleanup;
         }
         rc=write(cfg,kOutputConnector,kHDMI);
-        outputConfigTemporarilyChanged=(rc==0);
+        outputConfigTemporarilyChanged=false;
         int64_t verify=-1;
         int32_t confirm=read(cfg,kOutputConnector,&verify);
         printf("stage=hdmi_only_change rc=0x%08x read_rc=0x%08x "
@@ -163,7 +163,12 @@ int main(int argc,char** argv) {
                (unsigned)rc,(unsigned)confirm,(unsigned)(uint32_t)verify,
                confirm==0&&verify==kHDMI?1:0);
         fflush(stdout);
-        if(rc||confirm||verify!=kHDMI){accepted=false;goto cleanup;}
+        if(rc||confirm||verify!=kHDMI) {
+           if(rc==0 && confirm==0 && verify==kExpected)
+               puts("stage=hdmi_only result=NO_EFFECT original_mask_unchanged=1 output_not_started=1");
+           accepted=false;goto cleanup;
+        }
+        outputConfigTemporarilyChanged=true;
     }
     rc=query(dev,kOutputIID,&output);
     if(rc||!output){accepted=false;goto cleanup;}
@@ -260,6 +265,14 @@ cleanup:
               (unsigned)afterRc,(unsigned)(uint32_t)after,
               outputConfigRestored?1:0);
        if(!outputConfigRestored)accepted=false;
+    }
+    if(cfg&&!outputConfigTemporarilyChanged) {
+        int64_t verify=-1;
+        const GetInt read=(GetInt)(*(void***)cfg)[6];
+        int32_t vr=read(cfg,kOutputConnector,&verify);
+        outputConfigRestored=(vr==0 && verify==kExpected);
+        printf("stage=hdmi_only_unchanged verification_rc=0x%08x "
+               "original_mask_intact=%u\n",(unsigned)vr,outputConfigRestored?1:0);
     }
     release(cfg);release(frame);release(status);release(output);release(dev);release(iterator);
     if(lib)dlclose(lib);
