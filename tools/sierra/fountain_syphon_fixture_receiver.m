@@ -7,6 +7,7 @@
 #import <Syphon/Syphon.h>
 #import <OpenGL/OpenGL.h>
 #import <OpenGL/gl.h>
+#import <OpenGL/glext.h>
 #import <CommonCrypto/CommonDigest.h>
 #import <sys/sysctl.h>
 #import <unistd.h>
@@ -62,12 +63,31 @@ int main(int argc,const char **argv) {
                         size_t w=(size_t)sz.width,h=(size_t)sz.height;
                         if(w>0&&h>0&&w<=4096&&h<=4096&&image.textureName>0) {
                             NSMutableData *pixels=[NSMutableData dataWithLength:w*h*4];
-                            glBindTexture(GL_TEXTURE_RECTANGLE_ARB,image.textureName);
-                            glPixelStorei(GL_PACK_ALIGNMENT,1);
-                            while(glGetError()!=GL_NO_ERROR) {} // flush old error
-                            glGetTexImage(GL_TEXTURE_RECTANGLE_ARB,0,GL_RGBA,GL_UNSIGNED_BYTE,
-                                          pixels.mutableBytes);
-                            GLenum err=glGetError();
+                            // Syphon image textures are IOSurface-backed. Do
+                            // not assume glGetTexImage works directly with
+                            // that storage: attach the received GPU texture to
+                            // a local FBO and read the real color attachment.
+                            // This is independent of the publisher's own hash.
+                            GLuint fbo=0;
+                            glGenFramebuffersEXT(1,&fbo);
+                            glBindFramebufferEXT(GL_FRAMEBUFFER_EXT,fbo);
+                            glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT,
+                                GL_COLOR_ATTACHMENT0_EXT,
+                                GL_TEXTURE_RECTANGLE_ARB,image.textureName,0);
+                            GLenum fboStatus=glCheckFramebufferStatusEXT(GL_FRAMEBUFFER_EXT);
+                            GLenum err=GL_NO_ERROR;
+                            if(fboStatus==GL_FRAMEBUFFER_COMPLETE_EXT) {
+                                glReadBuffer(GL_COLOR_ATTACHMENT0_EXT);
+                                glPixelStorei(GL_PACK_ALIGNMENT,1);
+                                glReadPixels(0,0,(GLsizei)w,(GLsizei)h,
+                                    GL_RGBA,GL_UNSIGNED_BYTE,pixels.mutableBytes);
+                                err=glGetError();
+                            } else err=GL_INVALID_FRAMEBUFFER_OPERATION_EXT;
+                            glBindFramebufferEXT(GL_FRAMEBUFFER_EXT,0);
+                            glDeleteFramebuffersEXT(1,&fbo);
+                            if(err!=GL_NO_ERROR)
+                                printf("stage=syphon_receive fbo_status=0x%x\n",
+                                       (unsigned)fboStatus);
                             if(err==GL_NO_ERROR) {
                                 NSString *sha=hashPixels(pixels.bytes,pixels.length);
                                 [unique addObject:sha];
