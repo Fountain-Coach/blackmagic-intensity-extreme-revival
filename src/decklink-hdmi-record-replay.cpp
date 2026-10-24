@@ -13,6 +13,8 @@
 // must witness optical playback. An S_OK API return is NOT optical proof.
 #include <CoreFoundation/CoreFoundation.h>
 #include <CoreGraphics/CoreGraphics.h>
+#include <ImageIO/ImageIO.h>
+#include <vector>
 #include <CommonCrypto/CommonDigest.h>
 #include <mach/mach_time.h>
 #include <sys/stat.h>
@@ -403,12 +405,146 @@ done:
     fflush(stdout);
     return ok&&accepted==kFrames*2&&digitalMatches==accepted;
 }
+// Fallback optical playback when today's input currently has no signal lock.
+// Both private JPEGs were captured earlier from the *same* physical
+// Blackmagic HDMI IN; this does not manufacture a new recording. The decoded
+// content is upscaled to the exact same UYVY 1080p30 output interface.
+static int clampByte(int n) {return n<0?0:n>255?255:n;}
+static void convertRGB(const uint8_t* pixel,int& Y,int& U,int& V) {
+    const int R=pixel[0],G=pixel[1],B=pixel[2];
+    Y=clampByte(16+((47*R+157*G+16*B+128)>>8));
+    U=clampByte(128+((-26*R-87*G+112*B+128)>>8));
+    V=clampByte(128+((112*R-102*G-10*B+128)>>8));
+}
+static bool openArchivedJPEG(int which,std::vector<uint8_t>& dest,char shaHex[65]) {
+    const char* name=which==0?"/tmp/fc-intensity-extreme-physical-frame0.jpg":
+                              "/tmp/fc-intensity-extreme-physical-frame1.jpg";
+    const char* reference=which==0?
+        "ea1f51836311a496d91f493f82bb9e380f41efff76992ef8438cea6511c562d3":
+        "ab1abfddb80eb4a7d1404272aefed88d55373fd344dbb1debdc63a19c0c32634";
+    struct stat st;
+    if(lstat(name,&st)||!S_ISREG(st.st_mode)||st.st_uid!=getuid()||
+       (st.st_mode&0077)!=0||st.st_nlink!=1||
+       st.st_size<100||st.st_size>262144)return false;
+    const int fd=open(name,O_RDONLY|O_NOFOLLOW);
+    if(fd<0)return false;
+    std::vector<uint8_t> jpeg((size_t)st.st_size);
+    const bool all=readExact(fd,jpeg.data(),jpeg.size());
+    close(fd);
+    if(!all)return false;
+    uint8_t signature[CC_SHA256_DIGEST_LENGTH];
+    CC_SHA256(jpeg.data(),(CC_LONG)jpeg.size(),signature);
+    hexDigest(signature,shaHex);
+    if(strcmp(shaHex,reference)!=0)return false;
+    CFURLRef url=CFURLCreateFromFileSystemRepresentation(
+        kCFAllocatorDefault,(const UInt8*)name,strlen(name),false);
+    if(!url)return false;
+    CGImageSourceRef source=CGImageSourceCreateWithURL(url,nullptr);
+    CFRelease(url);
+    if(!source)return false;
+    CGImageRef image=CGImageSourceCreateImageAtIndex(source,0,nullptr);
+    CFRelease(source);
+    if(!image)return false;
+    const size_t srcW=320,srcH=180;
+    if(CGImageGetWidth(image)!=srcW || CGImageGetHeight(image)!=srcH){
+        CGImageRelease(image);return false;
+    }
+    std::vector<uint8_t> rgba(srcW*srcH*4,0);
+    CGColorSpaceRef space=CGColorSpaceCreateDeviceRGB();
+    if(!space){CGImageRelease(image);return false;}
+    CGContextRef ctx=CGBitmapContextCreate(rgba.data(),srcW,srcH,8,
+                      srcW*4,space,kCGImageAlphaPremultipliedLast|
+                      kCGBitmapByteOrder32Big);
+    CGColorSpaceRelease(space);
+    if(!ctx){CGImageRelease(image);return false;}
+    CGContextSetInterpolationQuality(ctx,kCGInterpolationNone);
+    CGContextDrawImage(ctx,CGRectMake(0,0,srcW,srcH),image);
+    CGContextRelease(ctx);
+    CGImageRelease(image);
+    dest.resize(kFrameBytes);
+    for(int y=0;y<kHeight;++y) {
+        uint8_t* dst=dest.data()+(size_t)y*kStride;
+        const size_t sy=(size_t)y*srcH/kHeight;
+        for(int pair=0;pair<kWidth/2;++pair) {
+            const size_t x0=(size_t)(pair*2)*srcW/kWidth;
+            const size_t x1=(size_t)(pair*2+1)*srcW/kWidth;
+            const uint8_t* a=rgba.data()+(sy*srcW+x0)*4;
+            const uint8_t* b=rgba.data()+(sy*srcW+x1)*4;
+            int y0,u0,v0,y1,u1,v1;
+            convertRGB(a,y0,u0,v0);
+            convertRGB(b,y1,u1,v1);
+            uint8_t* p=dst+(size_t)pair*4;
+            p[0]=(uint8_t)((u0+u1+1)/2);
+            p[1]=(uint8_t)y0;
+            p[2]=(uint8_t)((v0+v1+1)/2);
+            p[3]=(uint8_t)y1;
+        }
+    }
+    return true;
+}
+static bool replayArchivedPhysicalJPEGs(DeckLinkDevice& deck) {
+    std::vector<uint8_t> frames[2];
+    char originalSha[2][65]={{0}};
+    if(!openArchivedJPEG(0,frames[0],originalSha[0]) ||
+       !openArchivedJPEG(1,frames[1],originalSha[1])) {
+        puts("stage=archive_playback result=missing_or_unverified_private_real_capture");
+        return false;
+    }
+    void* output=nullptr;
+    int32_t rc=query(deck.device,kOutputIID,&output);
+    bool ok=rc==0&&output&&outputModeAvailable(output);
+    if(!ok){releaseObject(output);return false;}
+    void** ov=*(void***)output;
+    rc=((EnableOut)ov[6])(output,kMode1080p30,0);
+    printf("stage=archived_output_enable rc=0x%08x\n",(unsigned)rc);
+    if(rc){releaseObject(output);return false;}
+    int apiAccepted=0,byteIdentical=0;
+    if(cueBars(output,1)) {
+        for(int repeat=0;repeat<2&&ok;++repeat)for(int which=0;which<2&&ok;++which){
+            void* frame=nullptr;
+            rc=((CreateFrame)ov[9])(output,kWidth,kHeight,kStride,kUYVY,0,&frame);
+            if(rc||!frame){ok=false;break;}
+            void* outBytes=nullptr;
+            rc=((FrameBytes)(*(void***)frame)[8])(frame,&outBytes);
+            if(rc||!outBytes){ok=false;releaseObject(frame);break;}
+            memcpy(outBytes,frames[which].data(),kFrameBytes);
+            bool equals=memcmp(outBytes,frames[which].data(),kFrameBytes)==0;
+            if(equals)++byteIdentical;
+            if(equals) {
+                rc=((DisplaySync)ov[11])(output,frame);
+                if(!rc) ++apiAccepted;
+                else ok=false;
+            } else ok=false;
+            printf("stage=archived_frame_playback source=original_24Oct_HMDI "
+                   "recording_index=%d repeat=%d output_rc=0x%08x "
+                   "full_output_buffer_matches_decoded_recording=%d "
+                   "source_jpeg_sha256=%s\n",
+                   which,repeat,(unsigned)rc,equals?1:0,originalSha[which]);
+            fflush(stdout);
+            releaseObject(frame);
+            if(ok)sleep(2);
+        }
+    } else ok=false;
+    if(ok&&!cueBars(output,1))ok=false;
+    int32_t stop=((NoArg)ov[7])(output);
+    printf("stage=archived_output_disable rc=0x%08x\n",(unsigned)stop);
+    if(stop)ok=false;
+    releaseObject(output);
+    printf("stage=archived_playback result=%s actual_source_JPEGs=2 "
+           "output_submissions=%d byte_identical_converted_buffers=%d "
+           "optical_monitor_witness=NOT_MEASURED "
+           "new_recording_accepted=0\n",
+           ok&&apiAccepted==4&&byteIdentical==4?"API_ACCEPTED":"FAILED",
+           apiAccepted,byteIdentical);
+    return ok&&apiAccepted==4&&byteIdentical==4;
+}
 int main(int argc,char** argv) {
     const bool probe=argc==2&&!strcmp(argv[1],"--probe-output-1080p30");
     const bool roundtrip=argc==2&&!strcmp(argv[1],"--record-replay-1080p30");
     const bool cue=argc==2&&!strcmp(argv[1],"--monitor-cue-1080p30");
-    if(!probe&&!roundtrip&&!cue) {
-        fprintf(stderr,"usage: %s --probe-output-1080p30 | --monitor-cue-1080p30 | --record-replay-1080p30\n",argv[0]);
+    const bool archive=argc==2&&!strcmp(argv[1],"--play-archived-physical-jpegs-1080p30");
+    if(!probe&&!roundtrip&&!cue&&!archive) {
+        fprintf(stderr,"usage: %s --probe-output-1080p30 | --monitor-cue-1080p30 | --record-replay-1080p30 | --play-archived-physical-jpegs-1080p30\n",argv[0]);
         return 64;
     }
     if(!sameSilverHDMIRig()) {
@@ -436,6 +572,7 @@ int main(int argc,char** argv) {
                supported?"PASS":"NOT_SUPPORTED");
         return supported?0:23;
     }
+    if(archive) return replayArchivedPhysicalJPEGs(deck)?0:32;
     if(cue) {
         void* output=nullptr;
         int32_t rc=query(deck.device,kOutputIID,&output);
