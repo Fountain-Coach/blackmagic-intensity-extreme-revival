@@ -58,6 +58,30 @@ class ScratchRingTests(unittest.TestCase):
         self.assertFalse(f.metadata["physical_hdmi_verified"])
         self.assertFalse(ring.snapshot()["hardware_hdmi_capture_accepted"])
 
+    def test_app_restart_creates_new_media_epoch(self):
+        ring=ScratchHistory(clock=lambda:200)
+        ring.push(JPEG, 4_000_000_000, "synthetic", 4, 2)
+        ring.push(JPEG, 4_200_000_000, "synthetic", 4, 2)
+        restarted=ring.push(JPEG, 0, "synthetic", 4, 2)
+        state=ring.snapshot()
+        self.assertEqual(restarted.seq, 2)
+        self.assertEqual(state["stream_epoch"],1)
+        self.assertEqual(state["epoch_reason"],"timestamp_rollback")
+        self.assertEqual(state["count"],1)
+        self.assertEqual(state["oldest_seq"],2)
+        self.assertEqual(state["latest_seq"],2)
+
+    def test_synthetic_to_hardware_switch_resets_history(self):
+        ring=ScratchHistory(clock=lambda:200)
+        ring.push(JPEG,0,"synthetic",4,2)
+        ring.push(JPEG,0,"decklink-observed",4,2)
+        state=ring.snapshot()
+        self.assertEqual(state["stream_epoch"],1)
+        self.assertEqual(state["epoch_reason"],"source_changed")
+        self.assertEqual(state["count"],1)
+        self.assertEqual(state["latest"]["origin"],"decklink-observed")
+        self.assertFalse(state["hardware_hdmi_capture_accepted"])
+
     def test_online_timeout_is_explicit(self):
         current=[0]
         ring=ScratchHistory(clock=lambda:current[0])
