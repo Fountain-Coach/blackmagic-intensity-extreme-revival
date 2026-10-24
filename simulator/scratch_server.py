@@ -93,7 +93,8 @@ class ScratchHandler(BaseHTTPRequestHandler):
                 int(self.headers.get("X-Fountain-PTS-Ns", "-1")),
                 self.headers.get("X-Fountain-Origin", ""),
                 int(self.headers.get("X-Fountain-Width", "0")),
-                int(self.headers.get("X-Fountain-Height", "0")))
+                int(self.headers.get("X-Fountain-Height", "0")),
+                self.headers.get("X-Fountain-Stream-ID", "unspecified"))
         except (ValueError, InvalidFrame) as e:
             return self.respond_json(422, {"error":"FRAME_REJECTED",
                                             "reason":str(e)})
