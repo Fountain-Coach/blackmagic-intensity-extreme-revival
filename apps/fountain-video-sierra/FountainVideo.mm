@@ -20,6 +20,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <vector>
+#include <mach/mach_time.h>
 
 typedef void* (*FCFactory)(void);
 typedef int32_t (*FCNext)(void*, void**);
@@ -33,7 +34,6 @@ typedef int32_t (*FCGetInt)(void*, uint32_t, int64_t*);
 typedef uint32_t (*FCFrameFlags)(void*);
 typedef long (*FCFrameDimension)(void*);
 typedef int32_t (*FCFrameBytes)(void*, void**);
-typedef int32_t (*FCFrameTime)(void*, int64_t*, int64_t*, int64_t);
 
 static const unsigned char kInputIID[16] =
     {0xaf,0x22,0x76,0x2b,0xdf,0xac,0x48,0x46,0xaa,0x79,0xfa,0x88,0x83,0x56,0x09,0x95};
@@ -45,6 +45,30 @@ static const unsigned char kUnknownIID[16] =
     {0,0,0,0,0,0,0,0,0xc0,0,0,0,0,0,0,0x46};
 static const uint32_t kPixel2vuy = 0x32767579;
 static const uint32_t kNoInputSource = 0x80000000u;
+// Fixed rig: silver Mac HDMI OUT -> Intensity Extreme HDMI IN (same Mac via Thunderbolt).
+static BOOL fcSilverFixedBMD1080p30() {
+    CGDirectDisplayID ids[32]={0};
+    uint32_t count=0;
+    if(CGGetOnlineDisplayList(32,ids,&count)!=kCGErrorSuccess)return NO;
+    for(uint32_t i=0;i<count;++i) {
+        CGDirectDisplayID display=ids[i];
+        if(CGDisplayVendorNumber(display)!=8961 ||
+           CGDisplayPixelsWide(display)!=1920 ||
+           CGDisplayPixelsHigh(display)!=1080)continue;
+        CGDisplayModeRef mode=CGDisplayCopyDisplayMode(display);
+        const double hz=mode?CGDisplayModeGetRefreshRate(mode):0;
+        if(mode)CGDisplayModeRelease(mode);
+        if(hz>29.9 && hz<30.1)return YES;
+    }
+    return NO;
+}
+// Avoid the 10.4 frame GetStreamTime method: independently crash-isolated.
+static int64_t fcHostTicks30000() {
+    mach_timebase_info_data_t base={0,0};
+    if(mach_timebase_info(&base)!=KERN_SUCCESS || !base.denom)return -1;
+    const __uint128_t scaled=(__uint128_t)mach_absolute_time()*base.numer*30000u;
+    return (int64_t)(scaled/((__uint128_t)base.denom*1000000000u));
+}
 static CFUUIDBytes fcUUID(const unsigned char *id) {
     CFUUIDBytes result; memcpy(&result, id, 16); return result;
 }
@@ -168,6 +192,7 @@ struct FCCallback {
     std::atomic<uint64_t> valid;
     std::atomic<uint64_t> noSource;
     std::atomic<uint32_t> sequence;
+    std::atomic<uint32_t> pendingMain;
     void *context;
 };
 static uint32_t fcAddRef(FCCallback *c) { return ++c->refs; }
@@ -189,33 +214,39 @@ static int32_t fcFormatChange(FCCallback*,uint32_t,void*,uint32_t) { return 0; }
 @end
 
 static int32_t fcVideoFrame(FCCallback *cb, void *frame, void*) {
-    if (!frame) return 0;
+    if(!frame)return 0;
     ++cb->frames;
-    void **vt = *(void***)frame;
-    const uint32_t flags = ((FCFrameFlags)vt[7])(frame);
-    if (flags & kNoInputSource) { ++cb->noSource; return 0; }
+    void** vt=*(void***)frame;
+    const uint32_t flags=((FCFrameFlags)vt[7])(frame);
+    if(flags & kNoInputSource) { ++cb->noSource; return 0; }
     ++cb->valid;
-    // Decimate preview only; all true callback frame counts are preserved.
-    if (cb->sequence.fetch_add(1) % 3) return 0;
-    long width=((FCFrameDimension)vt[3])(frame);
-    long height=((FCFrameDimension)vt[4])(frame);
-    long stride=((FCFrameDimension)vt[5])(frame);
-    if (width<2 || height<1 || width>4096 || height>2160 ||
-        stride < width*2 || stride>65536 || (width&1)) return 0;
+    // Decimate to a bounded five frame/s preview while counting all callbacks.
+    if(cb->sequence.fetch_add(1)%6)return 0;
+    const long w=((FCFrameDimension)vt[3])(frame);
+    const long h=((FCFrameDimension)vt[4])(frame);
+    const long rb=((FCFrameDimension)vt[5])(frame);
+    if(w!=1920 || h!=1080 || rb!=3840 || cb->pendingMain.load()>=2)return 0;
     void* ptr=NULL;
-    if (((FCFrameBytes)vt[8])(frame,&ptr) || !ptr) return 0;
-    int64_t t=0,d=0;
-    BOOL timingOK=((FCFrameTime)vt[11])(frame,&t,&d,30000)==0 && d>0;
+    if(((FCFrameBytes)vt[8])(frame,&ptr) || !ptr)return 0;
+    const int64_t hostTicks=fcHostTicks30000();
+    if(hostTicks<0)return 0;
     @autoreleasepool {
-        NSData *rgba=rgbaFrom2vuy((const uint8_t*)ptr,
-                                 (size_t)stride*(size_t)height,
-                                 width,height,stride);
-        if (!rgba) return 0;
+        // 4,147,200 bytes are copied while the SDK's borrowed frame is valid.
+        // Never access a vendor frame from the dispatched AppKit block.
+        NSData *own=[NSData dataWithBytes:ptr length:(NSUInteger)(rb*h)];
+        if(!own)return 0;
+        ++cb->pendingMain;
         FountainController *owner=(__bridge FountainController*)cb->context;
         dispatch_async(dispatch_get_main_queue(), ^{
-            [owner acceptHardwareRGBA:rgba width:(NSUInteger)width
-                                 height:(NSUInteger)height ticks:t duration:d
-                          timestampValid:timingOK];
+            @autoreleasepool {
+                NSData *rgba=rgbaFrom2vuy((const uint8_t*)own.bytes,
+                                         own.length,w,h,rb);
+                if(rgba)[owner acceptHardwareRGBA:rgba width:(NSUInteger)w
+                                            height:(NSUInteger)h
+                                             ticks:hostTicks duration:1000
+                                    timestampValid:YES];
+            }
+            --cb->pendingMain;
         });
     }
     return 0;
@@ -590,7 +621,8 @@ static NSButton *fcButton(NSRect frame,NSString *title, id target, SEL action) {
     _callback->vt=kCallbackVtable;
     _callback->refs.store(1); _callback->frames.store(0);
     _callback->valid.store(0); _callback->noSource.store(0);
-    _callback->sequence.store(0); _callback->context=(__bridge void*)self;
+    _callback->sequence.store(0); _callback->pendingMain.store(0);
+    _callback->context=(__bridge void*)self;
     _pastCallbacks.push_back(_callback);
     void **inputTable=*(void***)_input;
     rc=((FCSetCallback)inputTable[17])(_input,_callback);
