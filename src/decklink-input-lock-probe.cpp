@@ -16,6 +16,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/sysctl.h>
 #include <unistd.h>
 
 typedef void* (*Factory)(void);
@@ -96,6 +97,15 @@ static int source_mode_preflight(uint32_t expected_rate, bool must_be_active) {
 }
 
 int main(int argc,char** argv) {
+    // Fail closed outside the exact 2011 Sierra witness machine.
+    char model[64]={0}, osrelease[64]={0};
+    size_t ml=sizeof(model), ol=sizeof(osrelease);
+    if(sysctlbyname("hw.model",model,&ml,nullptr,0) ||
+       sysctlbyname("kern.osrelease",osrelease,&ol,nullptr,0) ||
+       strcmp(model,"Macmini5,3") || strncmp(osrelease,"16.",3)) {
+        puts("stage=host result=wrong_silver_sierra_fixture vendor_calls=0");
+        return 20;
+    }
     if(argc!=2) {
         puts("usage: lock-probe --preflight-1080p25|--preflight-1080p30"
              "|--probe-active-1080p25|--probe-active-1080p30");
