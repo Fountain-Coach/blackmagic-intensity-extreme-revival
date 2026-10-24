@@ -1,38 +1,53 @@
-# The Fountain Video Instrument: proposed architecture
+# Fountain Video Instrument — software-first architecture
 
-**Status: virtual capture/playback backend implemented and tested; physical and cross-platform native adapters remain in design.**
+**Implemented:** full simulated capture, playback, camera, cross-device virtual cable, stereo audio, frame clock, faults, recorder interchange and browser controls. **Optional:** the Sierra DeckLink/PCI hardware backend, which remains independently unverified for a real Nikon HDMI image.
 
-The Intensity Extreme is only one candidate backend. We separate the physical hardware from the semantics of capture, recording, transformation and presentation.
+[Launch and run the full software laboratory](full-software-video-laboratory.md) — private WLAN http://192.168.8.50:8272/lab.
 
-```text
-Intensity Extreme (Thunderbolt / tunneled PCI Express)
-    |
-[hardware backend: legacy IOKit today, independent backend researched]
-    |
-[typed video frames + audio samples + timestamps + capabilities]
-    |
-[host capture service: diagnostics, capture, archive, playback]
-    |
-[standard transport and archival formats]
-    |
-Reframe / Teatro on macOS, iPadOS and Linux
-```
+## Design ownership
 
-**Boundaries**
-- The observed original Intensity Extreme is **half-duplex**: capture mode and playback mode cannot be enabled simultaneously. This was measured in both activation orders and agrees with Blackmagic SDK guidance. Do not promise a simultaneous same-device capture/processing/playback pipeline; use separate devices or capture and playback in separate sessions. [Evidence](../tests/2026-10-21-half-duplex-loopback.md).
-- A host physically connected to the device handles its platform-specific controller and drivers. An iPad on WLAN is a client, not a direct Thunderbolt-1 PCI host.
-- Independent, documented transport (potentially WebRTC for interactive preview and conventional video files for archives) should not dictate proprietary application semantics.
-- MIDI 2.0 may orchestrate scenarios and timing where appropriate; it is **not** a substitute for a high-bandwidth video transport.
-- Original recordings remain separate from derived compositions and transformations.
-- Every backend must report capabilities, capture errors, timestamp provenance, and an honest readiness state.
+All downstream application semantics belong to the video instrument, not the Blackmagic card, Syphon, Nikon Live View, HDMI electrical ports or a named proprietary API. The physical host is an optional adapter, not a precondition of developing or running the instrument.
 
-**Milestones**
-1. Read-only device, firmware, and readiness probe against the installed legacy driver.
-2. Deterministic test-frame acquisition with an unprotected source.
-3. Recorded and network-accessible frames with timestamps.
-4. One host-independent visual transformation and playback scenario.
-5. Investigation of a replacement hardware backend after low-level behavior is sufficiently known.
+    Reframe / Teatro / browser / local recorder
+                       |
+    source-owned media and control contract:
+      YUV 2vuy, stereo PCM, timestamps, capabilities,
+      signal status, frame scheduling, errors and provenance
+                       |
+             Video Instrument backend
+                  /             \
+         FULL SOFTWARE       OPTIONAL HARDWARE
+         deterministic lab      Sierra DeckLink
+         two simulated          Intensity Extreme
+         half-duplex units      independently witnessed
+                  \             /
+                 same application meaning
 
-**Implemented reference:** the [Virtual Video Instrument](virtual-video-instrument.md) supplies deterministic YUV frames, rational timestamps, half-duplex behavior and a browser preview for development without physical video equipment. The real HDMI receiver remains unverified.
+### Media contract
 
-**Explicit exclusion:** Syphon is not part of the target stack.
+- Video: true generated (not captured) YUV 4:2:2 8-bit buffers with width, height, stride, format, rational PTS, source and CRC.
+- Audio: 48 kHz, 16-bit signed stereo with exact samples-per-frame and sample index including 29.97 / 59.94 fractional rates.
+- Frame source: virtual camera, virtual output, or optional independently verified physical device.
+- Timing: a monotonic logical media clock; network or actual hardware timestamps require an explicit adapter provenance.
+- Capabilities: declarative properties, not inferred from the existence of a UI element.
+- Safety: no protected input bypass; absent source and dropped/underrun frames are explicit fault states.
+- Archival: generated test bytes and metadata are preserved losslessly in a synthetic raw archive; real footage must never be conflated with this archive.
+
+### Half-duplex ownership
+
+The physical Intensity Extreme is **half-duplex**; input and output cannot run simultaneously. The full simulator enforces the same restriction **per simulated device**. Its working loopback is not a single-device self-loop: it uses two separate modeled units linked by a virtual source-owned signal. Video, PCM, and timestamps are transferred without regeneration in the receiving path. A same-unit capture/playback attempt fails with the observed legacy conflict code.
+
+### Orthogonal contracts
+
+Hardware/firmware/PCI/DMA, electrical format lock and real-camera settings are owned by the **optional physical adapter** and its independent acceptance tests. They are never prerequisites for testing media timing, recordings, publication clients, transformations, two-instrument routing, no-source UI, fault handling or downstream Reframe/Teatro software features.
+
+Original older application flow — Black Syphon → Syphon → Vuo → NDI — is recovered in [historical evidence](historical-black-syphon-vuo-ndi-bridge.md). It is not a software-lab dependency. Syphon and a single historical creative-coding framework are not mandatory abstractions: the needed semantics are owned by the instrument, and any adapter is replaceable.
+
+## Verification boundary
+
+- Virtual tests: Python 3.10+ standard library; current local suite **68 tests passed** on Ubuntu with the camera switched off.
+- Native macOS GUI: Fountain Video on Sierra defaults to a generated, visibly labeled synthetic source, with a shortcut to the full lab; selecting real hardware is explicit.
+- Real capture: **not accepted**. No actual HDMI image or live source frame has yet been obtained from the Nikon/Intensity Extreme.
+- Real output sink, actual interlacing, analog electrical conversion, kernel-driver ownership and real Syphon/NDI publishing are not simulated and cannot be claimed as achieved based on virtual tests.
+
+No GitHub CI. Git source and local witnessed tests are authoritative.
