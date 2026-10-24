@@ -855,7 +855,13 @@ static int runWindowSelfTest(void) {
         app.delegate=nil;
         printf("stage=app_window result=%s virtual_frame=%u\n",
                valid?"pass":"fail",(unsigned)valid);
-        return valid?0:46;
+        /* This CLI test manually pumps a run loop without NSApplication.run.
+         * Exit after releasing hardware: draining a synthetic AppKit app's
+         * outermost pool is not an application lifecycle test.
+         * Normal GUI shutdown is separately verified via Apple Events Quit.
+         */
+        fflush(stdout);
+        exit(valid?0:46);
     }
 }
 static int runAutoScanSelfTest(void) {
@@ -887,7 +893,8 @@ static int runAutoScanSelfTest(void) {
         [controller.window close];
         controller.window=nil;
         app.delegate=nil;
-        return ended&&noSource ? 0 : 44;
+        fflush(stdout);
+        exit(ended&&noSource ? 0 : 44);
     }
 }
 static int runMovieSelfTest(void) {
