@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import dataclass
+from fractions import Fraction
 from io import BytesIO
 import json
 import struct
@@ -110,16 +111,27 @@ def audio_interval(mode_name: str, frame: int) -> tuple[int, int]:
 
 
 def make_packet(mode_name: str, frame: int, pattern: str,
-                origin: str, connector: str, muted: bool = False) -> MediaPacket:
+                origin: str, connector: str, muted: bool = False,
+                clock: Fraction | None = None) -> MediaPacket:
     validate_mode(mode_name, connector)
     raw = make_pattern(mode_name, frame, pattern)
     mode = MODE_BY_NAME[mode_name]
-    first, count = audio_interval(mode_name, frame)
+    if clock is None:
+        # Standalone fixture generation uses the native rational frame index.
+        first, count = audio_interval(mode_name, frame)
+        pts = frame * 1_000_000_000 * mode.rate_den // mode.rate_num
+        duration = ((frame+1)*1_000_000_000*mode.rate_den//mode.rate_num)-pts
+    else:
+        # The lab's master clock survives format changes and missing frames.
+        # Fraction arithmetic prevents drift at 29.97 / 59.94 fps.
+        end = clock + Fraction(1_000_000_000 * mode.rate_den, mode.rate_num)
+        pts = clock.numerator // clock.denominator
+        duration = end.numerator // end.denominator - pts
+        first = (clock * AUDIO_SAMPLE_RATE) // 1_000_000_000
+        count = (end * AUDIO_SAMPLE_RATE) // 1_000_000_000 - first
     pcm = pcm_samples(first, count, muted)
-    pts = frame * 1_000_000_000 * mode.rate_den // mode.rate_num
     meta = {
-        "frame": frame, "pts_ns": pts,
-        "duration_ns": ((frame+1)*1_000_000_000*mode.rate_den//mode.rate_num)-pts,
+        "frame": frame, "pts_ns": pts, "duration_ns": duration,
         "mode": mode.name, "width": mode.width, "height": mode.height,
         "interlaced": mode.name.startswith("1080i"),
         "pixel_format": "2vuy", "stride_bytes": mode.width*2,
@@ -185,6 +197,11 @@ class VideoInstrumentLab:
         self.emitted.clear()
         self.schedule.clear()
         self.serial = 0
+        self.logical_clock = Fraction(0)
+        self.total_received = 0
+        self.total_emitted = 0
+        self.total_input_lost = 0
+        self.total_output_lost = 0
         self.input_locked_before = False
         self.last_crc_equal = None
         self.events.clear()
@@ -332,6 +349,7 @@ class VideoInstrumentLab:
                     # Deliberate producer underflow; no stale frame is replayed.
                     self.transmitter.dropped += 1
                     self.transmitter.frame_number += 1
+                    self.total_output_lost += 1
                     self._event("output_underflow")
                 else:
                     produced = self.transmitter.advance(1)
@@ -341,10 +359,11 @@ class VideoInstrumentLab:
                     frame = self.transmitter.frame_number - 1
                     packet = make_packet(out_mode, frame, output_pattern,
                                          "virtual-playback", self.connector,
-                                         self.mute_audio)
+                                         self.mute_audio, clock=self.logical_clock)
                     output_packet = self._copy_to_device(self.transmitter, packet,
                                                          "playback")
                     self.emitted.append(output_packet)
+                    self.total_emitted += 1
             if self.receiver.streaming:
                 active, source_mode, protected = self._active_source()
                 if self.scenario == "loopback" and output_packet is None:
@@ -368,9 +387,11 @@ class VideoInstrumentLab:
                     else:
                         packet = make_packet(self.receiver.mode.name, frame,
                                              self.pattern, "virtual-camera",
-                                             self.connector, self.mute_audio)
+                                             self.connector, self.mute_audio,
+                                             clock=self.logical_clock)
                     inbound = self._copy_to_device(self.receiver, packet, "capture")
                     self.captured.append(inbound)
+                    self.total_received += 1
                     if self.scenario == "loopback":
                         self.last_crc_equal = (
                             inbound.metadata["video_crc32"] ==
@@ -383,6 +404,12 @@ class VideoInstrumentLab:
                             raise AssertionError("Virtual cable altered media bytes")
                         self._event("loopback_received",
                                     video_crc32=inbound.metadata["video_crc32"])
+                else:
+                    self.total_input_lost += 1
+            current_mode = (self.transmitter.mode if self.transmitter.streaming
+                            else self.receiver.mode)
+            self.logical_clock += Fraction(
+                1_000_000_000 * current_mode.rate_den, current_mode.rate_num)
             self.serial += 1
         return self.snapshot()
 
@@ -416,6 +443,10 @@ class VideoInstrumentLab:
             "physical_device_access": False, "physical_signal_verified": False,
             "device_instances": 2, "half_duplex_per_device": True,
             "scenario": self.scenario, "tick": self.serial,
+            "clock_ns": self.logical_clock.numerator // self.logical_clock.denominator,
+            "totals": {"received": self.total_received, "emitted": self.total_emitted,
+                       "input_missing": self.total_input_lost,
+                       "output_missing": self.total_output_lost},
             "source": {
                 "type": "virtual-camera" if self.scenario not in ("loopback", "playback")
                         else ("virtual-playback" if self.scenario == "loopback" else "none"),
