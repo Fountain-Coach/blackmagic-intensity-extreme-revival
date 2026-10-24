@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """Fountain HDMI Frame Mailbox v1 — Sierra writer / Linux virtio-block reader.
 
 The silver Mac still owns actual Thunderbolt / Blackmagic PCI hardware.
