@@ -4,6 +4,14 @@
 **Target:** macOS Sierra 10.12.6, 2011 Intel Mac mini, Xcode 9.2  
 **Status:** Real native desktop application **starts in software-only synthetic video mode**. It no longer queries Blackmagic hardware at launch. A dedicated **Software lab…** button opens the [complete video/audio simulation](../../docs/full-software-video-laboratory.md). Optional real capture still uses the installed Desktop Video 10.4 driver if deliberately selected; physical HDMI capture remains unverified.
 
+## Browser Scratch integration
+
+The actual Sierra application now includes a **Browser scratch…** button and **Stream frames to private browser** checkbox. Its source-neutral frame path converts both generated video and optional DeckLink-received YUV frames into preview images, then uses [FCScratchPublisher](FCScratchPublisher.mm) for token-protected, bounded, single-flight JPEG uploads to the Ubuntu receiver. The user-owned application does not launch the receiver itself.
+
+**[Browser Scratch](http://192.168.8.50:8273/scratch)** runs on the trusted WLAN. It supports a rolling 144-frame cache, reverse/forward shuttle, freeze, jog dragging and return to live. The [full design and security boundary](../../docs/hdmi-to-browser-stream-and-scratch.md) explains how source-provenance, stream epochs and media acceptance remain separate. The app starts in **synthetic source mode**, so the Nikon can remain off. The physical DeckLink-to-browser branch is implemented but has not received a verified real HDMI frame.
+
+Compile and test the JPEG encoder using the app executable's `--self-test-scratch` argument. Unlike a cosmetic mock, the Sierra application was witnessed actually sending generated video bytes to the Ubuntu receiver, which were shown in Chrome on a separate Mac. The browser's eight interaction acceptance checks passed. Audio is not yet forwarded by this scratch transport.
+
 ## What the application does
 
 Fountain Video is a native **AppKit application**. On launch it selects **Virtual color bars · test** and starts drawing generated frames, without any camera, HDMI connection or Blackmagic device query. The separate full-stack simulator runs on the Ubuntu Mac mini and is reachable through a **Software lab…** button. Only optional real capture loads the installed **DeckLinkAPI.framework**; the isolated crashing CoreMediaIO plug-in is not required.
