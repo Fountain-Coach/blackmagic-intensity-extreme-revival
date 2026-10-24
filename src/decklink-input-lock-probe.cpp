@@ -169,7 +169,7 @@ int main(int argc,char** argv) {
     rc=query(device,kStatusIID,&status);
     if(rc||!status){result=46;goto cleanup;}
     rc=((Enable)(*(void***)input)[6])(input,mode,0x32767579u,0);
-    printf("stage=enable_input mode=%up pixel_buffer=2vuy rc=0x%08x\n",
+    printf("stage=enable_input mode=%s pixel_buffer=2vuy rc=0x%08x\n",
            rate==60?"720p60":(rate==30?"1080p30":"1080p25"),(unsigned)rc);
     fflush(stdout);
     if(rc){result=47;goto cleanup;}
