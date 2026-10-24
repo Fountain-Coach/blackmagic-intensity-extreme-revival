@@ -22,21 +22,24 @@ def synthetic_macho():
                      0x19, 72, b"__DATA".ljust(16, b"\0"),
                      0x1000, 0x1000, 0x1000, 0x1000,
                      0, 0, 0, 0)
-    names = [module.VTABLE_SYMBOL, module.READ_SYMBOL, module.WRITE_SYMBOL]
+    names = [module.VTABLE_SYMBOL, module.READ_SYMBOL, module.WRITE_SYMBOL,
+             module.FIRMWARE_SYMBOL]
     strings = b"\0"
     name_offsets = []
     for name in names:
         name_offsets.append(len(strings))
         strings += name.encode("ascii") + b"\0"
-    values = [0x1100, 0x2300, 0x2400]
+    values = [0x1100, 0x2300, 0x2400, 0x2500]
     struct.pack_into("<IIIIII", data, 104, module.LC_SYMTAB, 24,
-                     0x300, 3, 0x400, len(strings))
+                     0x300, len(names), 0x400, len(strings))
     for i, (name_offset, value) in enumerate(zip(name_offsets, values)):
         struct.pack_into("<IBBHQ", data, 0x300 + i * 16,
                          name_offset, 0x0f, 1, 0, value)
     data[0x400:0x400 + len(strings)] = strings
     struct.pack_into("<Q", data, 0x1100 + 16 + module.READ_SLOT_BYTES, 0x2300)
     struct.pack_into("<Q", data, 0x1100 + 16 + module.WRITE_SLOT_BYTES, 0x2400)
+    struct.pack_into("<Q", data, 0x1100 + 16 + module.FIRMWARE_SLOT_BYTES, 0x2500)
+    data[0x1800 + module.A124_MODEL_CODE * 16] = 0x0b
     return data
 
 
@@ -49,6 +52,18 @@ class HDExtremeDispatchTests(unittest.TestCase):
             data, symbols[module.VTABLE_SYMBOL], module.READ_SLOT_BYTES), 0x2300)
         self.assertEqual(module.read_slot_target(
             data, symbols[module.VTABLE_SYMBOL], module.WRITE_SLOT_BYTES), 0x2400)
+
+    def test_firmware_version_selector_and_table_byte(self):
+        data = synthetic_macho()
+        self.assertEqual(module.read_slot_target(
+            data, 0x1100, module.FIRMWARE_SLOT_BYTES), 0x2500)
+        self.assertEqual(module.expected_firmware_version(
+            data, 0x1800, module.A124_MODEL_CODE), 0x0b)
+
+    def test_invalid_model_code_rejected(self):
+        data = synthetic_macho()
+        with self.assertRaisesRegex(ValueError, "Model code out"):
+            module.expected_firmware_version(data, 0x1800, 0x4d)
 
     def test_independent_read_and_write_slots(self):
         data = synthetic_macho()
