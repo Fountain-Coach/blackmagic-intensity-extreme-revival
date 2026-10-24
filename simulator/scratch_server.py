@@ -123,7 +123,14 @@ def main():
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8273)
     args = parser.parse_args()
-    token = os.environ.get("FOUNTAIN_SCRATCH_INGEST_TOKEN", "")
+    token_file = os.environ.get("FOUNTAIN_SCRATCH_INGEST_TOKEN_FILE", "")
+    if token_file:
+        try:
+            token = Path(token_file).read_text(encoding="ascii").strip()
+        except (OSError, UnicodeError):
+            token = ""
+    else:
+        token = os.environ.get("FOUNTAIN_SCRATCH_INGEST_TOKEN", "")
     if not token:
         secret = Path.home() / ".config" / "fountain-video" / "scratch-ingest-token"
         try:
