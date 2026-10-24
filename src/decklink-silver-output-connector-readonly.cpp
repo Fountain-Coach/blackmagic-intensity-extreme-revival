@@ -44,13 +44,14 @@ int main(int argc,char**argv){
   int32_t inputRC=((GetInt)(*(void***)cfg)[6])(cfg,0x7669636eu,&input); // 'vicn'
   int32_t modeRC=(status&&!ss)?((GetInt)(*(void***)status)[4])(status,0x63766f6du,&actualMode):ss;
   printf("stage=original_output_connector config_query_rc=0x%08x "
-         "current_output_rc=0x%08x selected_output=0x%08x is_hdmi=%u "
+         "current_output_rc=0x%08x selected_output=0x%08x hdmi_selected=%u hdmi_exclusive=%u "
          "capabilities_rc=0x%08x supported_output_mask=0x%08x "
          "hdmi_supported=%u component_supported=%u composite_supported=%u "
          "selected_input_rc=0x%08x selected_input=0x%08x "
          "idle_rc=0x%08x idle=0x%08x default_mode_rc=0x%08x default_mode=0x%08x "
          "current_mode_rc=0x%08x current_mode=0x%08x writes=0 streams=0\n",
          (unsigned)c,(unsigned)outputRC,(unsigned)(uint32_t)output,
+         outputRC==0&&((uint32_t)output&2)?1:0,
          outputRC==0&&(uint32_t)output==2?1:0,
          (unsigned)availRC,(unsigned)(uint32_t)available,
          availRC==0&&(available&2)?1:0,availRC==0&&(available&8)?1:0,
