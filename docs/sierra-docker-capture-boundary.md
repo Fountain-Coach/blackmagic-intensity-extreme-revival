@@ -14,7 +14,7 @@ The Sierra Fountain Video app already sends real *synthetic* JPEG bytes into the
 
 ## Container stage: no takeover of working service
 
-The container packages the existing Python 3.12 standard-library scratch receiver, not proprietary Blackmagic libraries. Nonroot user, read-only filesystem, all Linux capabilities dropped, bounded memory, token from private Docker secret file. Default port 8373 keeps the existing receiver on 8273 untouched. The viewer is unauthenticated, so default binding is 127.0.0.1 only.
+The container packages the existing Python 3.12 standard-library scratch receiver, not proprietary Blackmagic libraries. Read-only filesystem, no-new-privileges, all Linux capabilities dropped, bounded memory, token from a private Docker secret file. On this local Compose implementation the secret bind retains root ownership and 0600 permissions; the process therefore runs as container root with all capabilities removed rather than silently weakening the token file permissions. This is an explicit hardening limitation for further review. Default port 8373 keeps the existing receiver on 8273 untouched. The viewer is unauthenticated, so default binding is 127.0.0.1 only.
 
 On a Linux Docker host, with an existing private token file (32+ characters):
 
