@@ -319,5 +319,24 @@ class FullSoftwareVideoLabTests(unittest.TestCase):
         self.assertEqual(self.lab.snapshot()["clock_ns"],0)
 
 
+    def test_output_underflow_never_exposes_stale_output_frame(self):
+        self.lab.reset("loopback", "PAL")
+        self.lab.step(1)
+        self.assertIsNotNone(self.lab.frame("output"))
+        self.assertTrue(self.lab.snapshot()["output"]["signal_present"])
+        self.lab.change_source(output_auto_fill=False)
+        state=self.lab.step(1)
+        self.assertFalse(state["output"]["signal_present"])
+        self.assertIsNone(state["output"]["last_frame"])
+        self.assertIsNone(self.lab.frame("output"))
+        self.assertIsNone(self.lab.frame("input"))
+        self.assertIsNone(state["loopback"]["last_video_audio_pts_identical"])
+        self.lab.queue_output("checker", 1)
+        state=self.lab.step(1)
+        self.assertTrue(state["output"]["signal_present"])
+        self.assertTrue(state["loopback"]["last_video_audio_pts_identical"])
+        self.assertIsNotNone(self.lab.frame("output"))
+
+
 if __name__ == "__main__":
     unittest.main()
