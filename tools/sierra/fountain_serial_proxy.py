@@ -44,9 +44,9 @@ class SerialSender(object):
         return got
 
     def submit(self, data, pts, width, height, stream):
-        frame_header = header(self.fid + 1, pts, width, height, data, stream)
         with self.serial_lock:
             self.fid = self.fid % 999999999999 + 1
+            frame_header = header(self.fid, pts, width, height, data, stream)
             fid = str(self.fid).encode("ascii")
             send_line(self.fd, frame_header)
             self.expect(b"H " + fid)
@@ -161,8 +161,9 @@ def run(serial, token_file, bind, port):
         server = HTTPServer((bind, port), LocalProxyHandler)
         server.token = token
         server.sender = SerialSender(fd)
-        print("stage=serial_host result=listening bound_to=loopback",
-              "physical_hdmi_capture_accepted=0 guest_network_required=0",flush=True)
+        sys.stdout.write("stage=serial_host result=listening bound_to=loopback "
+                         "physical_hdmi_capture_accepted=0 guest_network_required=0\n")
+        sys.stdout.flush()
         try:
             server.serve_forever(poll_interval=.2)
         finally:
