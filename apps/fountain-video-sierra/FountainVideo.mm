@@ -215,7 +215,7 @@ static void* kCallbackVtable[5] = {
                              (self.bounds.size.height-scaled.height)/2,
                              scaled.width,scaled.height);
         [self.frameImage drawInRect:box fromRect:NSZeroRect
-                          operation:NSCompositeSourceOver fraction:1
+                          operation:NSCompositingOperationSourceOver fraction:1
                     respectFlipped:YES hints:nil];
     }
     NSString *notice=self.notice?:@"NO SOURCE";
@@ -301,8 +301,8 @@ static NSButton *fcButton(NSRect frame,NSString *title, id target, SEL action) {
 - (void)buildWindow {
     self.window=[[NSWindow alloc]
         initWithContentRect:NSMakeRect(0,0,1120,700)
-                  styleMask:(NSTitledWindowMask|NSClosableWindowMask|
-                             NSMiniaturizableWindowMask)
+                  styleMask:(NSWindowStyleMaskTitled|NSWindowStyleMaskClosable|
+                             NSWindowStyleMaskMiniaturizable)
                     backing:NSBackingStoreBuffered defer:NO];
     [self.window setTitle:@"Fountain Video"];
     [self.window center];
