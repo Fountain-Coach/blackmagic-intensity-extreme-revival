@@ -80,12 +80,42 @@ def main(argv):
         time.sleep(2.0)
     finally:
         if switched:
-            restore_rc = Quartz.CGDisplaySetDisplayMode(display, original, None)
-            restored = restore_rc == 0
-            print("stage=silver_hdmi_rehandshake restore_to_original_rc=%s" %
-                  restore_rc)
+            # Sierra can give the display a NEW Quartz ID when changing the
+            # timing. Restoring by the stale pre-switch ID returned rc=1001
+            # on 24 October; macOS later reverted automatically when this
+            # program exited. Reenumerate, then resolve a fresh 30Hz mode.
+            restore_rc = None
+            for attempt in range(6):
+                rr, current_ids, nn = Quartz.CGGetOnlineDisplayList(16, None, None)
+                if rr == 0 and nn == 1 and \
+                        Quartz.CGDisplayVendorNumber(current_ids[0]) == vendor:
+                    live = current_ids[0]
+                    if describe(Quartz.CGDisplayCopyDisplayMode(live)) == \
+                            (1920, 1080, 30.0):
+                        restore_rc = 0
+                        restored = True
+                        break
+                    candidate = None
+                    for possible in Quartz.CGDisplayCopyAllDisplayModes(live, None):
+                        if describe(possible) == (1920, 1080, 30.0) and \
+                                Quartz.CGDisplayModeIsUsableForDesktopGUI(possible):
+                            candidate = possible
+                            break
+                    if candidate is not None:
+                        restore_rc = Quartz.CGDisplaySetDisplayMode(
+                            live, candidate, None)
+                        if restore_rc == 0:
+                            restored = True
+                            break
+                time.sleep(0.3)
+            print("stage=silver_hdmi_rehandshake "
+                  "restore_to_fresh_display_id_rc=%s restored=%s "
+                  "os_auto_reverts_temporary_mode_on_exit=1" %
+                  (restore_rc, int(restored)))
             sys.stdout.flush()
-    observed = Quartz.CGDisplayCopyDisplayMode(display)
+    rr, actual_ids, actual_count = Quartz.CGGetOnlineDisplayList(16, None, None)
+    observed = Quartz.CGDisplayCopyDisplayMode(actual_ids[0]) \
+        if rr == 0 and actual_count == 1 else None
     good = restored and describe(observed) == (1920, 1080, 30.0)
     print("stage=silver_hdmi_rehandshake result=%s "
           "source_original_restored=%d output_cable_unchanged=1 "
