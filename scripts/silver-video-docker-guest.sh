@@ -19,7 +19,7 @@ if [ ! -x "$ROOT/xhyve" ]; then
   echo "stage=silver_video_guest result=hypervisor_not_executable" >&2
   exit 22
 fi
-if [ "$1" = "--check" ]; then
+if [ "${1:---check}" = "--check" ]; then
   echo "stage=silver_video_guest result=ready host=Sierra guest=Alpine_3.24.3 linux_docker_disk=present network=disabled physical_capture=NOT_ACCEPTED"
   exit 0
 fi
