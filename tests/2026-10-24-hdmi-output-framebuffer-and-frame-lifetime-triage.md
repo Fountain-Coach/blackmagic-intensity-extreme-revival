@@ -33,6 +33,18 @@ Different SHA-256 hashes establish that **the Mac's display framebuffer is actua
 
 The single physical-input test requested exact mode 0x48703330 (1080p30), matching the Mac's current output. Its DeckLink SetCallback, EnableVideoInput and StartStreams calls each returned S_OK. The initial vendor signal-lock query reported false; detected-mode retrieval returned error 0x80000001. The observer then terminated with SIGSEGV on the **vendor notification thread** before valid received pixels could be verified.
 
+Correct installed kernel-driver identity has also been verified using the **actual loaded bundle**, not the separate BlackmagicIO extension:
+
+    /Library/Extensions/DeckLink_Driver.kext/Contents/Info.plist
+
+- Bundle ID: com.blackmagic-design.desktopvideo.iokit.driver
+- Version: 10.4, bundled March 30, 2015
+- Built with SDK: macosx10.9 (Xcode 5.1.1-era toolchain)
+- Exact `IOKitPersonalities/DeckLink_Driver/IONameMatch` contains `pcibdbd,a124` at list entry 27.
+- Actual original kernel executable SHA-256: c4ec945aa46d07123788e66c219203026d1dcddffad20d1a55b8b5b4943d3780
+
+This proves Desktop Video 10.4 was **intended to attach to the Intensity Extreme PCI identity**; the problem is not simply that an unrelated card's driver loaded. It does not establish Sierra support or valid input-frame memory.
+
 Installed user-space Blackmagic library SHA-256:
 
     6972a2b025cf333a6bbf2c8a1199af89a9f85c1ccfcb17d2055876251c558137
