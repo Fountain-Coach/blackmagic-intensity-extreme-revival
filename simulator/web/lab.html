@@ -210,9 +210,9 @@ function showFrame(prefix,meta,allowed) {
 function render(state,force=false) {
  if(!state) return;
  last=state;
- $('rx-count').textContent=state.input.delivered;
- $('tx-count').textContent=state.output.delivered;
- $('drop-count').textContent=state.input.dropped+state.output.dropped;
+ $('rx-count').textContent=state.totals.received;
+ $('tx-count').textContent=state.totals.emitted;
+ $('drop-count').textContent=state.totals.input_missing+state.totals.output_missing;
  $('tick').textContent=state.tick;
  $('rx-state').textContent=state.input.signal_locked?'Virtual lock ON':state.input.activity==='idle'?'Idle':'No source / wrong mode';
  $('rx-state').className=state.input.signal_locked?'state-yes':'state-no';
