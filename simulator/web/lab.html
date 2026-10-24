@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Fountain Video Laboratory — Software Instruments</title>
+<style>
+:root{--bg:#101518;--panel:#192126;--panel2:#20292d;--line:#344046;--text:#e5e6e1;--muted:#a1adb0;--mint:#b5d9d1;--amber:#d6b580;--red:#e8aaa7}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+main{max-width:1440px;margin:0 auto;padding:27px clamp(17px,3vw,45px) 65px}
+header{border-bottom:1px solid var(--line);padding:0 0 21px;display:flex;justify-content:space-between;gap:25px;align-items:center}
+.id{font-size:12px;letter-spacing:.18em;text-transform:uppercase;font-weight:650}
+.tone{font-size:12px;color:var(--muted);margin-top:4px}
+.provenance{border:1px solid #7e9f96;border-radius:100px;color:var(--mint);padding:6px 12px;font-size:11px;font-weight:650;letter-spacing:.05em;white-space:nowrap}
+h1{font-size:clamp(29px,4vw,48px);line-height:1.13;letter-spacing:-.035em;font-weight:520;margin:28px 0 9px}
+.lead{max-width:950px;color:var(--muted);font-size:15px;margin:0 0 25px}
+a{color:var(--mint)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px}
+.studio{display:grid;grid-template-columns:minmax(0,1fr) minmax(292px,330px);gap:16px}
+@media(max-width:1000px){.studio{grid-template-columns:1fr}}
+.monitors{display:grid;grid-template-columns:1fr 1fr;gap:13px}
+@media(max-width:610px){.monitors{grid-template-columns:1fr}}
+.monitor{min-width:0;overflow:hidden}
+.monitor-head{padding:12px 14px;display:flex;justify-content:space-between;gap:8px;align-items:center}
+.monitor-head strong{font-size:13px;font-weight:650}
+.monitor-head span{font-size:11px;color:var(--muted)}
+.screen{position:relative;aspect-ratio:16/9;background:#080c0d;display:flex;align-items:center;justify-content:center}
+.screen img{display:block;width:100%;height:100%;object-fit:contain;image-rendering:auto}
+.watermark{position:absolute;top:10px;left:10px;font-size:9px;letter-spacing:.13em;font-weight:720;padding:4px 8px;border:1px solid #d4bd8a;background:#10110fdb;color:#e8d4a7}
+.blank{position:absolute;inset:0;background:#090f12;display:flex;align-items:center;justify-content:center;flex-direction:column;text-align:center;padding:20px}
+.blank strong{font-size:14px;font-weight:500}
+.blank span{margin-top:5px;font-size:11px;color:var(--muted);max-width:230px}
+.monitor-foot{padding:12px 14px;display:flex;justify-content:space-between;gap:10px;color:var(--muted);font-size:11px}
+.state-yes{color:var(--mint)}.state-no{color:var(--red)}.state-idle{color:var(--muted)}
+.route{margin:13px 0;padding:12px 15px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.route span{border:1px solid #526067;border-radius:5px;padding:5px 8px;font-size:11px}
+.route .arrow{border:0;color:var(--muted);padding:0}
+.route .tag{margin-left:auto;color:var(--amber);border-color:#806f57}
+.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+@media(max-width:610px){.metrics{grid-template-columns:1fr 1fr}}
+.metric{padding:14px 16px;min-height:93px}
+.metric b{font:500 28px/1.1 ui-monospace,SFMono-Regular,Menlo,monospace;display:block;font-variant-numeric:tabular-nums;margin:5px 0}
+.metric span{font-size:11px;color:var(--muted)}
+.control{padding:20px}
+.control h2{font-size:15px;font-weight:650;margin:0 0 17px}
+label{display:block;margin:12px 0 5px;font-size:11px;color:var(--muted)}
+select,button{font:inherit;font-size:12px}
+select{width:100%;padding:10px 9px;border:1px solid #506168;border-radius:6px;color:var(--text);background:#111a1e}
+button{border:1px solid #53656a;color:var(--text);background:#2a373d;border-radius:7px;min-height:38px;padding:8px 11px;cursor:pointer}
+button:hover{filter:brightness(1.14)}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.primary{background:var(--mint);border-color:var(--mint);color:#122024;font-weight:700}
+button.ghost{background:transparent}
+.buttons{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:15px}
+.buttons .full{grid-column:span 2}
+.groups{border-top:1px solid var(--line);margin-top:18px;padding-top:14px}
+.groups h3{font-size:12px;font-weight:650;color:var(--text);margin:0 0 7px}
+.pills{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:10px 0}
+.pills label{border:1px solid #425257;border-radius:7px;display:flex;gap:6px;align-items:center;padding:8px;margin:0;font-size:11px;color:var(--text)}
+.pills input{accent-color:#b5d9d1}
+.status{min-height:50px;padding:13px 14px;margin-top:15px;background:#111a1e;border:1px solid #3c4d53;border-radius:8px;color:var(--mint);font-size:12px}
+.bottom{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
+@media(max-width:850px){.bottom{grid-template-columns:1fr}}
+.info{padding:20px;min-width:0}
+.info h2{font-size:14px;margin:0 0 13px}
+pre{color:#c9d2d0;white-space:pre-wrap;word-break:break-word;font:11px/1.6 ui-monospace,Menlo,monospace;max-height:300px;overflow:auto;margin:0}
+.footer{color:var(--muted);font-size:12px;margin-top:28px;padding-top:17px;border-top:1px solid var(--line)}
+kbd{background:#25333a;padding:2px 4px;border-radius:3px;color:var(--text)}
+</style>
+</head>
+<body>
+<main>
+<header>
+  <div><div class="id">Fountain Coach / Video Instrument Laboratory</div>
+    <div class="tone">Capture · playback · signal graph · deterministic media · archives</div></div>
+  <div class="provenance">SIMULATED ONLY · NO HARDWARE</div>
+</header>
+<h1>A complete video test circuit. No cables.</h1>
+<p class="lead">A software camera, a video transmitter, and a video receiver. Both directions are inspectable. The virtual loopback uses two independently modeled half-duplex devices so video and audio can cross a simulated cable with identical bytes and timestamps.</p>
+<div class="studio">
+<div>
+  <div class="monitors">
+    <section class="card monitor" aria-label="Simulated capture preview">
+      <div class="monitor-head"><strong>Input / virtual receiver</strong><span id="rx-mode">—</span></div>
+      <div class="screen">
+        <img alt="Entirely generated test video in the capture device" id="rx-img" style="display:none">
+        <div class="watermark">SYNTHETIC VIDEO</div>
+        <div class="blank" id="rx-blank"><strong>No virtual input yet</strong><span>Select a scenario and run ticks.</span></div>
+      </div>
+      <div class="monitor-foot"><span id="rx-state">Idle</span><span id="rx-crc">No frame</span></div>
+    </section>
+    <section class="card monitor" aria-label="Simulated playback output">
+      <div class="monitor-head"><strong>Output / virtual transmitter</strong><span id="tx-mode">—</span></div>
+      <div class="screen">
+        <img alt="Entirely generated test video scheduled to virtual output" id="tx-img" style="display:none">
+        <div class="watermark">SYNTHETIC VIDEO</div>
+        <div class="blank" id="tx-blank"><strong>No virtual output yet</strong><span>Choose loopback or playback to activate the transmitter.</span></div>
+      </div>
+      <div class="monitor-foot"><span id="tx-state">Idle</span><span id="tx-crc">No frame</span></div>
+    </section>
+  </div>
+  <div class="card route" aria-label="Software signal route">
+    <span id="producer">Virtual camera</span><span class="arrow" aria-hidden="true">→</span>
+    <span id="route-medium">Simulated HDMI</span><span class="arrow" aria-hidden="true">→</span>
+    <span id="receiver">Virtual capture</span><span class="tag">SOFTWARE CONNECTION</span>
+  </div>
+  <div class="metrics" aria-label="Simulation performance">
+    <div class="card metric"><span>Received frames</span><b id="rx-count">0</b><span>Full 2vuy buffers</span></div>
+    <div class="card metric"><span>Produced frames</span><b id="tx-count">0</b><span>Scheduled output</span></div>
+    <div class="card metric"><span>Dropped / missing</span><b id="drop-count">0</b><span>Input + output</span></div>
+    <div class="card metric"><span>Logical tick</span><b id="tick">0</b><span>Rational timestamp clock</span></div>
+  </div>
+  <div class="bottom">
+    <section class="card info"><h2>Latest media packet</h2><pre id="media">A virtual session has not started.</pre></section>
+    <section class="card info"><h2>Protocol events</h2><pre id="events">No events.</pre></section>
+  </div>
+</div>
+<section class="card control" aria-label="Virtual instrument controls">
+  <h2>Simulation session</h2>
+  <label for="scenario">Circuit</label>
+  <select id="scenario">
+    <option value="loopback">Two-device output → input loopback</option>
+    <option value="camera">Software camera → receiver</option>
+    <option value="playback">Software transmitter → output display</option>
+    <option value="camera-off">Camera off → no signal</option>
+    <option value="disconnected">Disconnected virtual cable</option>
+    <option value="mismatch">Format mismatch</option>
+    <option value="protected">Protected input blocked</option>
+    <option value="drops">Every third frame dropped</option>
+  </select>
+  <label for="mode">Input/output format</label>
+  <select id="mode"></select>
+  <label for="connector">Virtual connector</label>
+  <select id="connector"><option>HDMI</option><option>Component</option><option>Composite</option><option>S-Video</option></select>
+  <label for="pattern">Generated image</label>
+  <select id="pattern"><option value="moving">Moving shape</option><option value="checker">Checkerboard</option><option value="bars">Color bars</option></select>
+  <label for="detect">Simulated input detection</label>
+  <select id="detect">
+    <option value="continuous">Continuous: adapt to format changes</option>
+    <option value="once">Detect the first change once</option>
+    <option value="off">Fixed capture format</option>
+  </select>
+  <div class="buttons">
+    <button class="primary full" id="start">Reset and start scenario</button>
+    <button id="step">One frame</button>
+    <button id="step-ten">Ten frames</button>
+    <button id="run">Run animated</button>
+    <button id="pause">Pause animation</button>
+    <button class="ghost full" id="stop">Stop both simulated devices</button>
+  </div>
+  <div class="groups">
+    <h3>Virtual input faults &amp; recovery</h3>
+    <div class="pills">
+      <label><input type="checkbox" id="power" checked>Camera power</label>
+      <label><input type="checkbox" id="live-view" checked>Camera Live View</label>
+      <label><input type="checkbox" id="connected" checked>Virtual cable</label>
+      <label><input type="checkbox" id="mute">Mute synthetic audio</label>
+    </div>
+    <label for="source-mode">Source format (hot-swap)</label>
+    <select id="source-mode"></select>
+    <div class="buttons">
+      <button class="full" id="apply">Apply virtual source change</button>
+      <button class="ghost full" id="conflict">Test forbidden same-device full duplex</button>
+    </div>
+  </div>
+  <div class="groups">
+    <h3>Output queue &amp; archive</h3>
+    <label for="queue-pattern">Scheduled output frame</label>
+    <select id="queue-pattern"><option value="checker">Checkerboard</option><option value="moving">Moving shape</option><option value="bars">Color bars</option></select>
+    <div class="buttons">
+      <button id="queue">Queue five frames</button>
+      <button id="underflow">Test output underrun</button>
+      <button class="full" id="archive">Download synthetic frame + PCM archive</button>
+    </div>
+  </div>
+  <div role="status" aria-live="polite" class="status" id="status">The Nikon and physical Blackmagic device are not required.</div>
+</section>
+</div>
+<div class="footer">All video is generated as complete 8-bit YUV 4:2:2 buffers, accompanied by 48 kHz stereo PCM packets and exact rational presentation timestamps. Each instrument enforces half-duplex; simultaneous virtual loopback uses <em>two</em> instruments. MIDI, analog electrical conversion, real interlaced fields, GPU/Syphon and PCI/firmware are not emulated. Nothing here observes a physical Nikon or HDMI port. <a href="/">Open the original minimal simulator</a> · <a href="/api/lab/capabilities">Machine-readable capabilities</a>.</div>
+</main>
+<script>
+'use strict';
+const $=id=>document.getElementById(id);
+let last=null, timer=null, busy=false, lastRendered=-1;
+async function api(path, payload) {
+ const opts=payload===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)};
+ const response=await fetch(path,opts);
+ let result;
+ try {result=await response.json();} catch (_) {throw new Error('Invalid simulator response');}
+ if(!response.ok)throw new Error(result.message||result.error||'Simulator request failed');
+ return result;
+}
+function status(message, error=false){$('status').textContent=message;$('status').style.color=error?'var(--red)':'var(--mint)';}
+function showFrame(prefix,meta,allowed) {
+ const img=$(prefix+'-img'),blank=$(prefix+'-blank');
+ if(meta && allowed){
+   img.style.display='block'; blank.style.display='none';
+   const direction=prefix==='rx'?'input':'output';
+   img.src='/api/lab/'+direction+'.png?t='+meta.frame+'&v='+meta.video_crc32;
+ }else{
+   img.style.display='none';img.removeAttribute('src');
+   blank.style.display='flex';
+ }
+ $(prefix+'-crc').textContent=meta && allowed?'CRC '+meta.video_crc32:'No active frame';
+ $(prefix+'-mode').textContent=meta?meta.mode:'—';
+}
+function render(state,force=false) {
+ if(!state) return;
+ last=state;
+ $('rx-count').textContent=state.input.delivered;
+ $('tx-count').textContent=state.output.delivered;
+ $('drop-count').textContent=state.input.dropped+state.output.dropped;
+ $('tick').textContent=state.tick;
+ $('rx-state').textContent=state.input.signal_locked?'Virtual lock ON':state.input.activity==='idle'?'Idle':'No source / wrong mode';
+ $('rx-state').className=state.input.signal_locked?'state-yes':'state-no';
+ $('tx-state').textContent=state.output.streaming?'Virtual output active':'No output';
+ $('tx-state').className=state.output.streaming?'state-yes':'state-idle';
+ $('producer').textContent=state.source.type==='virtual-playback'?'Virtual playback':'Virtual camera';
+ $('receiver').textContent=state.input.activity==='idle'?'Output monitor':'Virtual capture';
+ $('route-medium').textContent='Virtual '+state.source.connector;
+ const videoState=state.input.last_frame||state.output.last_frame;
+ const frame=state.input.signal_locked?state.input.last_frame:state.output.last_frame;
+ $('media').textContent=frame?JSON.stringify(frame,null,2):'No valid virtual media packet.';
+ $('events').textContent=state.events.slice(-14).map(e=>JSON.stringify(e)).join('\n')||'No events.';
+ if(force||lastRendered!==state.tick) {
+   showFrame('rx',state.input.last_frame,state.input.signal_locked);
+   showFrame('tx',state.output.last_frame,state.output.streaming);
+   lastRendered=state.tick;
+ }
+ // Keep controls synchronized with server state on full configure/reload,
+ // but do not overwrite in-progress changes after every animation tick.
+ $('archive').disabled=state.archive.retained_capture_frames===0;
+}
+async function action(fn, message) {
+ if(busy)return;
+ busy=true;
+ try {const r=await fn(); if(r && r.simulated)render(r,true);if(message)status(message);return r;}
+ catch(e){status('Simulator: '+e.message,true);}
+ finally{busy=false;}
+}
+function pause(){if(timer){clearInterval(timer);timer=null;}$('run').textContent='Run animated';}
+function initialControls(state){
+ $('power').checked=state.source.power;$('live-view').checked=state.source.live_view;
+ $('connected').checked=state.source.connected;$('mute').checked=state.source.mute_audio;
+ $('source-mode').value=state.source.mode; $('detect').value=state.auto_detect;
+}
+$('start').onclick=()=>{pause();action(async()=>{
+ const r=await api('/api/lab/configure',{scenario:$('scenario').value,
+  mode:$('mode').value,connector:$('connector').value,
+  pattern:$('pattern').value,auto_detect:$('detect').value});
+ initialControls(r);return r;
+},'Virtual circuit started. No external hardware accessed.');};
+$('step').onclick=()=>action(()=>api('/api/lab/step',{count:1}),'One logical video frame interval.');
+$('step-ten').onclick=()=>action(()=>api('/api/lab/step',{count:10}),'Ten deterministic video frame intervals.');
+$('run').onclick=()=>{
+ if(timer){pause();return;}
+ $('run').textContent='Pause animation';
+ timer=setInterval(()=>{if(!busy)action(()=>api('/api/lab/step',{count:1}));},140);
+};
+$('pause').onclick=pause;
+$('stop').onclick=()=>{pause();action(()=>api('/api/lab/stop',{}),'Both instruments released.');};
+$('apply').onclick=()=>action(()=>api('/api/lab/source',{
+ power:$('power').checked,live_view:$('live-view').checked,
+ connected:$('connected').checked,mute_audio:$('mute').checked,
+ mode:$('source-mode').value,auto_detect:$('detect').value
+}),'Virtual signal controls applied.');
+$('conflict').onclick=()=>action(async()=>{
+ const r=await api('/api/lab/conflict',{});render(r.state,true);
+ status(r.blocked?'Correctly blocked same-device capture + playback ('+r.code+').':
+                 'Unexpected half-duplex result',!r.blocked);
+},null);
+$('queue').onclick=()=>action(()=>api('/api/lab/queue',
+  {count:5,pattern:$('queue-pattern').value}),
+  'Five frames added to virtual output queue.');
+$('underflow').onclick=()=>action(async()=>{
+ const r=await api('/api/lab/source',{output_auto_fill:false});
+ return r;
+},'Automatic output fill disabled; run ticks to observe queue underflow.');
+$('archive').onclick=()=>{if(last&&last.archive.retained_capture_frames>0){
+ location.href='/api/lab/archive.zip';
+ status('Download contains SYNTHETIC raw video, PCM audio and timestamp manifest.');
+}};
+window.addEventListener('beforeunload',pause);
+Promise.all([api('/api/lab/capabilities'),api('/api/lab/state')]).then(([caps,state])=>{
+ for(const mode of caps.modes){
+   for(const id of ['mode','source-mode']){
+     const option=document.createElement('option');
+     option.value=mode.name;
+     option.textContent=mode.name+' · '+mode.width+'×'+mode.height+' @ '+mode.rate;
+     $(id).appendChild(option);
+   }
+ }
+ $('mode').value='720p50'; $('scenario').value='loopback';
+ $('source-mode').value=state.source.mode;
+ initialControls(state);render(state,true);
+ status('Ready: two virtual devices. Choose Start scenario. Camera may remain OFF.');
+}).catch(e=>status('Simulator service unavailable: '+e.message,true));
+</script>
+</body>
+</html>
