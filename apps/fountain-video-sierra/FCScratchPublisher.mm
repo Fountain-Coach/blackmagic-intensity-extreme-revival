@@ -49,9 +49,9 @@
     NSBitmapImageRep *rep=[[NSBitmapImageRep alloc]
         initWithBitmapDataPlanes:NULL
         pixelsWide:(NSInteger)width pixelsHigh:(NSInteger)height
-        bitsPerSample:8 samplesPerPixel:3 hasAlpha:NO isPlanar:NO
-        colorSpaceName:NSDeviceRGBColorSpace bytesPerRow:(NSInteger)width*3
-        bitsPerPixel:24];
+        bitsPerSample:8 samplesPerPixel:4 hasAlpha:YES isPlanar:NO
+        colorSpaceName:NSDeviceRGBColorSpace bytesPerRow:(NSInteger)width*4
+        bitsPerPixel:32];
     if (!rep) return nil;
     NSGraphicsContext *graphics=[NSGraphicsContext graphicsContextWithBitmapImageRep:rep];
     if (!graphics) return nil;
