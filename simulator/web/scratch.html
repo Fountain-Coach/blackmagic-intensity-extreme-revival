@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Fountain Video / Browser Scratch</title>
+<style>
+:root{--bg:#111719;--surface:#1a2225;--line:#39474a;--muted:#a5b2b3;--text:#eef0ed;--mint:#b8e2d9;--warn:#e7c39a}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--text)}
+main{max-width:1180px;margin:auto;padding:25px clamp(18px,3vw,40px)}
+header{display:flex;justify-content:space-between;align-items:start;gap:15px;border-bottom:1px solid var(--line);padding-bottom:20px}
+mark{color:var(--mint);background:transparent;font-size:11px;letter-spacing:.11em;font-weight:700}
+h1{font-weight:530;letter-spacing:-.035em;line-height:1.15;font-size:clamp(30px,5vw,47px);margin:26px 0 11px}
+p{color:var(--muted);max-width:850px;margin:0 0 21px}
+.pill{display:inline-flex;padding:6px 11px;border:1px solid var(--line);border-radius:100px;color:var(--warn);font-size:11px;white-space:nowrap}
+.stage{position:relative;background:#05090a;border:1px solid var(--line);border-radius:12px;overflow:hidden;aspect-ratio:16 / 9;touch-action:pan-y;cursor:ew-resize;user-select:none}
+canvas{width:100%;height:100%;display:block}
+.overlay{position:absolute;top:16px;left:19px;background:#121718d1;border:1px solid #6b7f81;border-radius:6px;padding:6px 10px;color:var(--text);font-size:10px;letter-spacing:.07em;font-weight:700;pointer-events:none}
+.stage-bottom{position:absolute;bottom:15px;left:20px;right:20px;display:flex;justify-content:space-between;gap:15px;color:#e7ece9;font-size:11px;text-shadow:0 1px 2px black;pointer-events:none}
+.film{margin:15px 0 10px;display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:6px}
+.film button{border:1px solid var(--line);background:#060a0b;aspect-ratio:16/9;overflow:hidden;padding:0;cursor:pointer;border-radius:5px;position:relative}
+.film img{width:100%;height:100%;object-fit:contain;display:block}
+.film button.active{outline:2px solid var(--mint);outline-offset:1px}
+input[type=range]{width:100%;accent-color:var(--mint);cursor:ew-resize}
+.scrub{margin:0 0 7px;display:block}
+.scrub-cap{display:flex;justify-content:space-between;color:var(--muted);font-size:11px;margin:4px 0 0}
+.controls{display:flex;gap:8px;flex-wrap:wrap;margin:21px 0}
+button{font:inherit;font-size:13px;background:#273538;color:var(--text);border:1px solid #5b7071;padding:9px 15px;min-height:40px;border-radius:7px;cursor:pointer}
+button:hover{filter:brightness(1.15)}
+button:disabled{opacity:.45;cursor:default}
+button.primary{background:var(--mint);color:#182628;border-color:var(--mint);font-weight:650}
+button.selected{outline:2px solid var(--mint);outline-offset:1px}
+.mode{margin-left:auto;border:1px solid var(--line);border-radius:7px;padding:8px 13px;color:var(--muted);font-size:12px}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin-top:15px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:13px 15px;min-height:92px}
+.stat span{font-size:11px;color:var(--muted);display:block}
+.stat strong{font:500 22px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace}
+@media(max-width:660px){.stats{grid-template-columns:repeat(2,1fr)}.controls .mode{width:100%;margin-left:0}.film{grid-template-columns:repeat(4,1fr)}}
+footer{border-top:1px solid var(--line);padding:22px 0;color:var(--muted);font-size:12px;margin-top:25px;line-height:1.7}
+kbd{border:1px solid var(--line);border-radius:3px;padding:2px 5px;color:var(--text)}
+a{color:var(--mint)}
+</style>
+</head>
+<body>
+<main>
+<header><div><mark>FOUNTAIN COACH / VIDEO INSTRUMENT</mark><div style="font-size:12px;color:var(--muted);margin-top:5px">Live ingress · rolling memory · reversible browser playhead</div></div><span class="pill" id="provenance">WAITING FOR VIDEO</span></header>
+<h1>Scratch the living image.</h1>
+<p>Frames arrive continuously into a bounded memory. Drag the image or the timeline backward and forward, freeze it, play it in reverse, or return to live. Synthetic test footage and actual hardware observations are always distinguished.</p>
+<div class="stage" id="jog" role="slider" tabindex="0" aria-label="Jog video history backward and forward" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0">
+<canvas id="screen" width="960" height="540"></canvas>
+<div class="overlay" id="source-label">NO FRAMES · WAITING FOR SOURCE</div>
+<div class="stage-bottom"><span id="frame-label">No video loaded</span><span id="gesture">DRAG TO JOG</span></div>
+</div>
+<div class="film" id="film" aria-label="Eight historic frame points"></div>
+<div class="scrub"><input type="range" id="timeline" min="0" max="0" step="1" value="0" disabled aria-label="Scrub recorded video frame history"><div class="scrub-cap"><span id="oldest">Oldest retained frame</span><span id="newest">Live edge</span></div></div>
+<div class="controls">
+<button id="live" class="primary">● Return to live</button>
+<button id="reverse">◀ Reverse</button>
+<button id="back">‹ Frame</button>
+<button id="freeze">Ⅱ Freeze</button>
+<button id="forward">Frame ›</button>
+<button id="play">Forward ▶</button>
+<button id="speed">1× speed</button>
+<span id="transport" class="mode">Transport: LIVE</span>
+</div>
+<div class="stats">
+<div class="stat"><span>Retained frames</span><strong id="count">0</strong></div>
+<div class="stat"><span>Available history</span><strong id="duration">0.0 s</strong></div>
+<div class="stat"><span>Playhead</span><strong id="position">—</strong></div>
+<div class="stat"><span>Source status</span><strong id="status" style="font-size:15px">Waiting</strong></div>
+</div>
+<footer>Keyboard: <kbd>J</kbd> reverse, <kbd>K</kbd> freeze, <kbd>L</kbd> forward, <kbd>←</kbd>/<kbd>→</kbd> one frame, <kbd>Space</kbd> live/freeze. Drag horizontally on the image to jog. This is an in-memory browser instrument, not a persistent recorder. History is bounded and old frames will be evicted. Actual HDMI capture is <strong>not verified</strong> until a genuine frame arrives through the DeckLink adapter. <a href="http://benedikt-macmini.local:8272/lab">Open full software laboratory</a>.</footer>
+</main>
+<script>
+"use strict";
+const $ = id=>document.getElementById(id);
+const canvas=$("screen"),ctx=canvas.getContext("2d",{alpha:false});
+const state={history:[],oldest:null,latest:null,cursor:null,mode:"live",direction:1,
+             speed:1,dragging:false,startX:0,startCursor:0,loaded:null,sourceOnline:false};
+const TIMEOUT=1800;
+function banner(text){$("transport").textContent="Transport: "+text;}
+function displayBlank(text){
+ ctx.fillStyle="#080d0e";ctx.fillRect(0,0,canvas.width,canvas.height);
+ ctx.fillStyle="#a9b3b2";ctx.font="21px system-ui,sans-serif";ctx.textAlign="center";
+ ctx.fillText(text,canvas.width/2,canvas.height/2);
+}
+displayBlank("WAITING FOR VIDEO FRAMES");
+let generation=0, lastImageId=-1;
+function renderSeq(seq){
+ if(seq===null||seq===undefined) {displayBlank("WAITING FOR VIDEO FRAMES");return;}
+ if(lastImageId===seq)return;
+ const request=++generation;
+ const img=new Image();
+ img.onload=()=>{
+   if(request!==generation)return;
+   lastImageId=seq;
+   ctx.fillStyle="#050909";ctx.fillRect(0,0,canvas.width,canvas.height);
+   const scale=Math.min(canvas.width/img.naturalWidth,canvas.height/img.naturalHeight);
+   const w=img.naturalWidth*scale,h=img.naturalHeight*scale;
+   ctx.drawImage(img,(canvas.width-w)/2,(canvas.height-h)/2,w,h);
+ };
+ img.onerror=()=>{if(request===generation)displayBlank("FRAME NO LONGER AVAILABLE");};
+ img.src="/api/scratch/frame/"+seq+".jpg";
+}
+function nearest(seq){
+ const a=state.history;if(!a.length)return null;
+ if(seq<=a[0].seq)return a[0].seq;
+ if(seq>=a[a.length-1].seq)return a[a.length-1].seq;
+ return a[Math.min(a.length-1,Math.max(0,seq-a[0].seq))].seq;
+}
+function setCursor(seq,mode="freeze"){
+ if(!state.history.length)return;
+ state.mode=mode;
+ state.cursor=nearest(seq);
+ renderSeq(state.cursor);
+ sync();
+}
+function seekDelta(delta){
+ if(state.cursor===null)return;
+ setCursor(state.cursor+delta,"freeze");
+}
+function metadata(){
+ return state.history.find(f=>f.seq===state.cursor)||null;
+}
+function sync(){
+ const current=metadata();
+ $("timeline").disabled=!state.history.length;
+ if(state.history.length){
+  $("timeline").min=state.oldest;
+  $("timeline").max=state.latest;
+  $("timeline").value=state.cursor===null?state.latest:state.cursor;
+  $("jog").setAttribute("aria-valuemax",String(state.latest));
+  $("jog").setAttribute("aria-valuemin",String(state.oldest));
+  $("jog").setAttribute("aria-valuenow",String(state.cursor));
+ }
+ $("count").textContent=state.history.length;
+ $("position").textContent=state.cursor===null?"—":"#"+state.cursor;
+ $("frame-label").textContent=current?
+   "Frame "+current.seq+" · "+current.width+"×"+current.height+
+   " · PTS "+(current.pts_ns/1e9).toFixed(3)+" s":"No frame received";
+ $("provenance").textContent=current?
+     current.simulated?"SYNTHETIC · TEST VIDEO":"DECKLINK OBSERVED · UNVERIFIED HDMI"
+   :"WAITING FOR VIDEO";
+ $("source-label").textContent=current?
+   current.simulated?"SYNTHETIC VIDEO · NO CAMERA":"DECKLINK CALLBACK · NO HDMI ACCEPTANCE"
+   :"WAITING FOR FRAMES";
+ $("status").textContent=state.sourceOnline?"Active":"No recent frames";
+ $("status").style.color=state.sourceOnline?"var(--mint)":"var(--warn)";
+ banner(state.mode==="live"?"LIVE":state.mode==="freeze"?"FROZEN":
+        (state.mode==="reverse"?"REVERSE ":"FORWARD ")+state.speed+"×");
+ const first=state.history[0],last=state.history[state.history.length-1];
+ $("oldest").textContent=first?"#"+first.seq:"Oldest";
+ $("newest").textContent=last?"#"+last.seq:"Live";
+ $("duration").textContent=(first&&last?
+  Math.max(0,(last.pts_ns-first.pts_ns)/1e9).toFixed(1):"0.0")+" s";
+ $("speed").textContent=state.speed+"× speed";
+}
+async function refresh(){
+ try{
+  const response=await fetch("/api/scratch/state",{cache:"no-store"});
+  if(!response.ok)throw Error("HTTP "+response.status);
+  const data=await response.json();
+  state.history=data.history||[];
+  state.oldest=data.oldest_seq;state.latest=data.latest_seq;
+  state.sourceOnline=data.source_online;
+  if(!state.history.length){state.cursor=null;lastImageId=-1;
+      sync();return;}
+  if(state.mode==="live")state.cursor=state.latest;
+  else if(state.cursor===null)state.cursor=state.latest;
+  else if(state.cursor<state.oldest)state.cursor=state.oldest;
+  renderSeq(state.cursor);
+  renderFilm();
+  sync();
+ }catch(e){$("status").textContent="Offline";$("status").style.color="var(--warn)";}
+}
+let lastFilmKey="";
+function renderFilm(){
+ if(!state.history.length)return;
+ const a=state.history;
+ const key=[a[0].seq,Math.floor(a[a.length-1].seq/5)].join(":");
+ if(key===lastFilmKey)return;
+ lastFilmKey=key;
+ const box=$("film");box.replaceChildren();
+ const selected=new Set();
+ for(let i=0;i<8;i++){
+  const idx=Math.round((a.length-1)*i/7);
+  const f=a[idx];if(selected.has(f.seq))continue;selected.add(f.seq);
+  const button=document.createElement("button");
+  button.type="button";button.title="Go to frame "+f.seq;
+  const pic=new Image();pic.loading="lazy";pic.alt="History frame "+f.seq;
+  pic.src="/api/scratch/frame/"+f.seq+".jpg";
+  button.append(pic);button.onclick=()=>setCursor(f.seq);
+  box.append(button);
+ }
+}
+$("timeline").addEventListener("input",e=>setCursor(Number(e.target.value)));
+$("live").onclick=()=>{state.mode="live";state.cursor=state.latest;
+ renderSeq(state.cursor);sync();};
+$("freeze").onclick=()=>{state.mode="freeze";sync();};
+$("back").onclick=()=>seekDelta(-1);
+$("forward").onclick=()=>seekDelta(1);
+$("reverse").onclick=()=>{state.mode="reverse";sync();};
+$("play").onclick=()=>{state.mode="play";sync();};
+$("speed").onclick=()=>{state.speed=state.speed===1?2:state.speed===2?4:.5;sync();};
+const jog=$("jog");
+jog.addEventListener("pointerdown",e=>{
+ if(state.cursor===null)return;
+ state.dragging=true;state.startX=e.clientX;state.startCursor=state.cursor;
+ jog.setPointerCapture(e.pointerId);state.mode="freeze";sync();
+});
+jog.addEventListener("pointermove",e=>{
+ if(!state.dragging)return;
+ const delta=Math.round((e.clientX-state.startX)/7);
+ setCursor(state.startCursor+delta,"freeze");
+});
+for(const key of ["pointerup","pointercancel","lostpointercapture"])
+ jog.addEventListener(key,()=>{state.dragging=false;});
+document.addEventListener("keydown",e=>{
+ if(["INPUT","TEXTAREA","SELECT"].includes(document.activeElement.tagName))return;
+ const k=e.key.toLowerCase();
+ if(k==="arrowleft"){seekDelta(-1);e.preventDefault();}
+ if(k==="arrowright"){seekDelta(1);e.preventDefault();}
+ if(k==="j"){state.mode="reverse";sync();}
+ if(k==="k"){state.mode="freeze";sync();}
+ if(k==="l"){state.mode="play";sync();}
+ if(k===" "){state.mode=state.mode==="live"?"freeze":"live";
+                if(state.mode==="live")state.cursor=state.latest;
+                renderSeq(state.cursor);sync();e.preventDefault();}
+});
+let lastTick=performance.now(),accumulator=0;
+function animate(now){
+ const elapsed=Math.min(120,Math.max(0,now-lastTick));lastTick=now;
+ if((state.mode==="play"||state.mode==="reverse")&&state.history.length&&!state.dragging){
+   const current=metadata();
+   let frameDuration=1000/10;
+   const index=state.history.findIndex(x=>x.seq===state.cursor);
+   if(index>=1){
+    const dt=state.history[index].pts_ns-state.history[index-1].pts_ns;
+    if(dt>0&&dt<1e9)frameDuration=Math.max(16,dt/1e6);
+   }
+   accumulator+=elapsed*state.speed;
+   if(accumulator>=frameDuration){
+    const advance=Math.min(20,Math.floor(accumulator/frameDuration));
+    accumulator-=advance*frameDuration;
+    const delta=(state.mode==="reverse"?-1:1)*advance;
+    if(state.cursor+delta>state.latest||state.cursor+delta<state.oldest){
+      state.mode="freeze";sync();
+    }else setCursor(state.cursor+delta,state.mode);
+   }
+ }
+ requestAnimationFrame(animate);
+}
+setInterval(refresh,230);
+refresh();requestAnimationFrame(animate);
+</script>
+</body>
+</html>
