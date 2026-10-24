@@ -60,7 +60,7 @@ class HDMIRequestedTimingMathTests(unittest.TestCase):
 
     def test_reject_nonbinary_data(self):
         with self.assertRaises(TypeError):
-            decode("not a timing")
+            decode(1999)
 
     def test_color_mode_bits(self):
         self.assertEqual(colors[0x100],"YCbCr444")
