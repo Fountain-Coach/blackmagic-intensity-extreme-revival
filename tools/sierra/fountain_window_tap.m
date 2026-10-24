@@ -11,6 +11,8 @@
 #import <OpenGL/OpenGL.h>
 #import <Syphon/Syphon.h>
 #import <CommonCrypto/CommonDigest.h>
+#import <QuartzCore/QuartzCore.h>
+#import "FCScratchPublisher.h"
 #import <sys/sysctl.h>
 #import <sys/stat.h>
 #import <fcntl.h>
@@ -208,6 +210,27 @@ static NSWindow* fixture(TapFixtureView **outView) {
     [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:.6]];
     return window;
 }
+// This is intentionally ONLY for a generated window. The current trusted
+// scratch viewer is HTTP without viewer authentication: never send real
+// application windows to it. Real windows may be shared locally via Syphon.
+static FCScratchPublisher *fixtureScratch(void) {
+    CFPropertyListRef e=CFPreferencesCopyAppValue(
+        CFSTR("FountainVideoScratchEndpoint"),CFSTR("coach.fountain.video"));
+    CFPropertyListRef t=CFPreferencesCopyAppValue(
+        CFSTR("FountainVideoScratchToken"),CFSTR("coach.fountain.video"));
+    NSString *endpoint=CFBridgingRelease(e);
+    NSString *token=CFBridgingRelease(t);
+    if(![endpoint isKindOfClass:[NSString class]] ||
+       ![token isKindOfClass:[NSString class]]||token.length<32)return nil;
+    NSURL *url=[NSURL URLWithString:endpoint];
+    if(![[url scheme] isEqualToString:@"http"] ||
+       ![[url path] isEqualToString:@"/api/scratch/ingest"] ||
+       !([[url host] isEqualToString:@"benedikt-macmini.local"] ||
+         [[url host] isEqualToString:@"192.168.8.50"]) ||
+       [url port].integerValue!=8273 || [url user] || [url password] ||
+       [url query] || [url fragment])return nil;
+    return [[FCScratchPublisher alloc] initWithEndpoint:url token:token];
+}
 static BOOL makeGL(NSOpenGLContext **outGL) {
     NSOpenGLPixelFormatAttribute attrs[]={NSOpenGLPFAAccelerated,
                                            NSOpenGLPFAColorSize,24,0};
@@ -235,7 +258,7 @@ static BOOL publish(CGImageRef image,NSOpenGLContext* gl,SyphonServer *server) {
     return error==GL_NO_ERROR;
 }
 static void usage(void) {
-    puts("usage: fountain-window-tap --list | --list-syphon | --fixture-test | --fixture-publish");
+    puts("usage: fountain-window-tap --list | --list-syphon | --fixture-test | --fixture-publish | --fixture-wlan");
     puts("  --probe --id WINDOW_ID --pid OWNER_PID [--rect x,y,w,h]");
     puts("  --snapshot --id WINDOW_ID --pid OWNER_PID [--rect x,y,w,h] --filename NAME.png");
     puts("  --publish --id WINDOW_ID --pid OWNER_PID [--rect x,y,w,h] --allow-local-syphon");
@@ -248,14 +271,15 @@ int main(int argc,const char**argv) {
         if(argc==2 && strcmp(argv[1],"--list-syphon")==0){listSyphon();return 0;}
         BOOL selfTest=argc==2 && strcmp(argv[1],"--fixture-test")==0;
         BOOL fixturePublish=argc==2 && strcmp(argv[1],"--fixture-publish")==0;
+        BOOL fixtureLAN=argc==2 && strcmp(argv[1],"--fixture-wlan")==0;
         BOOL probe=argc>1&&strcmp(argv[1],"--probe")==0;
         BOOL snap=argc>1&&strcmp(argv[1],"--snapshot")==0;
         BOOL publishing=argc>1&&strcmp(argv[1],"--publish")==0;
-        if(!(selfTest||fixturePublish||probe||snap||publishing)){usage();return 64;}
+        if(!(selfTest||fixturePublish||fixtureLAN||probe||snap||publishing)){usage();return 64;}
         NSUInteger win=0,owner=0;
         BOOL hasWindow=NO,hasOwner=NO,hasRect=NO,allowPublish=NO;
         CGRect rect=CGRectZero;NSString *filename=nil;
-        if(!(selfTest||fixturePublish)) {
+        if(!(selfTest||fixturePublish||fixtureLAN)) {
             for(int i=2;i<argc;++i) {
                 if(!strcmp(argv[i],"--id")&&i+1<argc)
                     hasWindow=numeric(argv[++i],&win,1,UINT32_MAX);
@@ -275,7 +299,7 @@ int main(int argc,const char**argv) {
         }
         TapFixtureView *view=nil;
         NSWindow *testWindow=nil;
-        if(selfTest||fixturePublish) {
+        if(selfTest||fixturePublish||fixtureLAN) {
             testWindow=fixture(&view);
             win=(NSUInteger)testWindow.windowNumber;owner=(NSUInteger)getpid();
             printf("stage=window_fixture owner_pid=%lu window_id=%lu\n",
@@ -286,15 +310,17 @@ int main(int argc,const char**argv) {
             return 66;
         }
         NSOpenGLContext *gl=nil;SyphonServer *server=nil;
-        if(fixturePublish||publishing) {
+        FCScratchPublisher *scratch=fixtureLAN?fixtureScratch():nil;
+        if(fixtureLAN&&!scratch){puts("stage=window_tap result=TRUSTED_SCRATCH_CONFIG_MISSING");return 71;}
+        if(fixturePublish||fixtureLAN||publishing) {
             if(!makeGL(&gl)){puts("stage=window_tap result=GL_NOT_AVAILABLE");return 67;}
-            server=[[SyphonServer alloc] initWithName:(fixturePublish?@"Fountain Window Tap Test":@"Fountain Window Tap")
+            server=[[SyphonServer alloc] initWithName:((fixturePublish||fixtureLAN)?@"Fountain Window Tap Test":@"Fountain Window Tap")
                                 context:[gl CGLContextObj] options:nil];
             if(!server){puts("stage=window_tap result=SYPHON_SERVER_NOT_AVAILABLE");return 68;}
             printf("stage=window_tap syphon_server=%s transport=local_only\n",
-                fixturePublish?"Fountain_Window_Tap_Test":"Fountain_Window_Tap");
+                (fixturePublish||fixtureLAN)?"Fountain_Window_Tap_Test":"Fountain_Window_Tap");
         }
-        unsigned total=fixturePublish?20:publishing?20:selfTest?2:1;
+        unsigned total=(fixturePublish||publishing)?20:fixtureLAN?12:selfTest?2:1;
         NSString *firstHash=nil,*lastHash=nil;
         unsigned okFrames=0;
         for(unsigned frame=0;frame<total;++frame) {
@@ -324,6 +350,12 @@ int main(int argc,const char**argv) {
             if(selfTest)acceptable=YES;
             if(snap)acceptable=savePrivatePNG(image,filename);
             if(server)acceptable=publish(image,gl,server);
+            if(scratch && acceptable) {
+                NSImage *pic=[[NSImage alloc] initWithCGImage:image size:
+                       NSMakeSize(CGImageGetWidth(image),CGImageGetHeight(image))];
+                int64_t pts=(int64_t)(CACurrentMediaTime()*1000000000.0);
+                [scratch publishImage:pic ptsNs:pts origin:@"synthetic"];
+            }
             printf("stage=window_frame seq=%u source_pid=%lu window_id=%lu "
                    "width=%zu height=%zu crop=%u sha256=%s syphon_published=%u disk_saved=%u\n",
                    frame,(unsigned long)owner,(unsigned long)win,
@@ -336,6 +368,12 @@ int main(int argc,const char**argv) {
             if(server)[[NSRunLoop currentRunLoop]
                    runUntilDate:[NSDate dateWithTimeIntervalSinceNow:.22]];
         }
+        if(scratch)[[NSRunLoop currentRunLoop] runUntilDate:
+                   [NSDate dateWithTimeIntervalSinceNow:1.5]];
+        if(scratch)printf("stage=window_tap network_result=%s delivered=%lu failed=%lu "
+                          "origin=synthetic private_app_frames=0\n",
+                   scratch.delivered>=3&&scratch.failed==0?"PASS":"FAIL",
+                   (unsigned long)scratch.delivered,(unsigned long)scratch.failed);
         [server stop];
         if(testWindow)[testWindow close];
         if(selfTest && okFrames==2 && ![firstHash isEqualToString:lastHash]) {
@@ -343,7 +381,7 @@ int main(int argc,const char**argv) {
                  "blackmagic_touched=0 desktop_captured=0 network=0");
             return 0;
         }
-        if(okFrames==total) {
+        if(okFrames==total && (!scratch || (scratch.delivered>=3&&scratch.failed==0))) {
             printf("stage=window_tap result=PASS frames=%u syphon=%u fixture=%u\n",
                    okFrames,server?1:0,view?1:0);
             return 0;
