@@ -71,7 +71,10 @@ static uint32_t statusMode(void* status){
     return rc==0?(uint32_t)v:0;
 }
 int main(int argc,char**argv) {
-    if(argc!=2||strcmp(argv[1],"--test-p30-idle-12s"))return 64;
+    const bool blackOnly=argc==2 && !strcmp(argv[1],"--test-p30-black-8s");
+    const bool lastFrame=argc==2 && !strcmp(argv[1],"--test-p30-idle-12s");
+    if(!blackOnly && !lastFrame)return 64;
+    const unsigned seconds=blackOnly?8u:12u;
     if(!sourceMatches()){
         puts("stage=idle_output_transient result=WRONG_SILVER_RIG");
         return 65;
@@ -107,14 +110,14 @@ int main(int argc,char**argv) {
     printf("stage=idle_output_set_mode rc=0x%08x temporary=1\n",(unsigned)rc);
     if(rc)okay=false;
     else changedMode=true;
-    if(okay){
+    if(okay && lastFrame){
         rc=set(cfg,kIdle,(int64_t)kLast);
         printf("stage=idle_output_set_last_frame rc=0x%08x temporary=1\n",
                (unsigned)rc);
         if(rc)okay=false;
         else changedIdle=true;
     }
-    if(okay)for(unsigned tick=0;tick<12;++tick) {
+    if(okay)for(unsigned tick=0;tick<seconds;++tick) {
         int64_t nowIdle=0,nowMode=0;
         int32_t a=get(cfg,kIdle,&nowIdle),m=get(cfg,kDefault,&nowMode);
         printf("stage=idle_output_transient_state second=%u "
@@ -122,7 +125,8 @@ int main(int argc,char**argv) {
                "mode_get_rc=0x%08x mode_value=0x%08x\n",
                tick,(unsigned)a,(unsigned)(uint32_t)nowIdle,
                (unsigned)m,(unsigned)(uint32_t)nowMode);
-        if(a||m||(uint32_t)nowIdle!=kLast||(uint32_t)nowMode!=kHp30)
+        if(a||m||(uint32_t)nowIdle!=(blackOnly?kBlack:kLast)||
+           (uint32_t)nowMode!=kHp30)
             okay=false;
         statusMode(status);
         fflush(stdout);
@@ -153,9 +157,10 @@ int main(int argc,char**argv) {
                           (uint32_t)restoreMode==kHi50));
     }
     release(status);release(cfg);release(dev);dlclose(lib);
-    printf("stage=idle_output_transient result=%s duration_s=12 "
-           "original_preserved=1 persisted=0 monitor_optical_witness=none\n",
-           okay?"ACCEPTED":"FAILED");
+    printf("stage=idle_output_transient result=%s duration_s=%u "
+           "idle_black_preserved=%u original_preserved=1 persisted=0 "
+           "monitor_optical_witness=none\n",
+           okay?"ACCEPTED":"FAILED",seconds,(unsigned)blackOnly);
     fflush(stdout);
     return okay?0:71;
 }
