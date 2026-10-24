@@ -264,5 +264,60 @@ class FullSoftwareVideoLabTests(unittest.TestCase):
             self.lab.step(1)
 
 
+    def test_format_change_keeps_monotonic_master_clock_and_audio(self):
+        self.lab.reset("camera", "720p50", auto_detect="continuous")
+        self.lab.step(3)
+        self.assertEqual(self.lab.frame("input").metadata["pts_ns"], 40_000_000)
+        self.lab.change_source(mode="1080p25")
+        s = self.lab.step(1)
+        m = self.lab.frame("input").metadata
+        self.assertEqual(m["pts_ns"], 60_000_000)
+        self.assertEqual(m["duration_ns"], 40_000_000)
+        self.assertEqual(m["audio"]["start_sample"], 2880)
+        self.assertEqual(m["audio"]["samples_per_channel"], 1920)
+        s = self.lab.step(1)
+        self.assertEqual(self.lab.frame("input").metadata["pts_ns"], 100_000_000)
+        self.assertEqual(s["clock_ns"], 140_000_000)
+        self.assertEqual(s["totals"]["received"], 5)
+
+    def test_missing_frames_preserve_timeline(self):
+        self.lab.reset("camera-off", "720p50")
+        self.lab.step(4)
+        self.assertEqual(self.lab.snapshot()["clock_ns"], 80_000_000)
+        self.lab.change_source(power=True)
+        s = self.lab.step(1)
+        self.assertEqual(self.lab.frame("input").metadata["pts_ns"],80_000_000)
+        self.assertEqual(s["totals"]["input_missing"],4)
+        self.assertEqual(s["totals"]["received"],1)
+
+    def test_fractional_master_clock_has_no_cumulative_roundoff(self):
+        self.lab.reset("playback", "720p59.94")
+        for _ in range(3):
+            self.lab.step(10)
+        s = self.lab.snapshot()
+        self.assertEqual(s["clock_ns"],30*1001*1_000_000_000//60000)
+        m = self.lab.frame("output").metadata
+        self.assertEqual(m["pts_ns"],29*1001*1_000_000_000//60000)
+        self.assertEqual(m["audio"]["start_sample"],29*1001*48000//60000)
+
+    def test_output_underflow_does_not_rewind_timestamps(self):
+        self.lab.reset("loopback", "PAL")
+        self.lab.change_source(output_auto_fill=False)
+        self.lab.step(2)
+        self.lab.queue_output("bars", 1)
+        s = self.lab.step(1)
+        self.assertEqual(self.lab.frame("input").metadata["pts_ns"], 80_000_000)
+        self.assertEqual(self.lab.frame("input").metadata["audio"]["start_sample"],3840)
+        self.assertEqual(s["totals"]["output_missing"],2)
+        self.assertEqual(s["totals"]["input_missing"],2)
+
+    def test_reset_opens_new_monotonic_clock_epoch(self):
+        self.lab.reset("camera","PAL")
+        self.lab.step(5)
+        self.assertEqual(self.lab.snapshot()["clock_ns"],200_000_000)
+        self.lab.reset("camera","PAL")
+        self.assertEqual(self.lab.snapshot()["clock_ns"],0)
+
+
 if __name__ == "__main__":
     unittest.main()
