@@ -97,6 +97,8 @@ Our independent [A124 register contract](src/intensity-register-contract.c) comb
 
 ## HDMI streaming and browser scratching
 
+**New safe physical HDMI diagnosis:** The silver Mac mini's BMD HDMI framebuffer has been independently read and hashed at 1920×1080/30; consecutive real OS frames changed. The [one-command Sierra physical preflight](tests/2026-10-24-hdmi-output-framebuffer-and-frame-lifetime-triage.md) also validates our DeckLink callback against a source-owned mock with sanitizers, and identifies the exact failing vendor frame-destructor release. It does **not** claim an accepted capture frame. The native app now protects the working synthetic/browser stream from accidental re-entry into the crashing Desktop Video 10.4 input path.
+
 The [browser scratch instrument](docs/hdmi-to-browser-stream-and-scratch.md) now receives **real transported JPEG frames** from the native Sierra Fountain Video.app over the private LAN, retains up to 144 indexed frames, and supports drag-to-jog, reverse and forward shuttle, freeze, frame stepping, and return to live. A separate [full software lab](docs/full-software-video-laboratory.md) remains available.
 
 **[Open Browser Scratch](http://192.168.8.50:8273/scratch)** (private WLAN).
