@@ -22,6 +22,7 @@
 #include <vector>
 #include <mach/mach_time.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 typedef void* (*FCFactory)(void);
 typedef int32_t (*FCNext)(void*, void**);
@@ -36,6 +37,24 @@ typedef uint32_t (*FCFrameFlags)(void*);
 typedef long (*FCFrameDimension)(void*);
 typedef int32_t (*FCFrameBytes)(void*, void**);
 
+// Never store the local HDMI mailbox bearer token in macOS preferences.
+// Only the Sierra user's existing 0600 local file may authorize loopback
+// upload. The Linux Scratch receiver has a separate, never-exported token.
+static NSString *fcLocalHDMIMailboxToken() {
+    NSString *path=[NSHomeDirectory() stringByAppendingPathComponent:
+                     @".config/fountain-video/serial-local-ingest-token"];
+    struct stat entry;
+    if(lstat(path.fileSystemRepresentation,&entry)!=0 ||
+       !S_ISREG(entry.st_mode) || (entry.st_mode & 0077)!=0 ||
+       entry.st_uid!=getuid() || entry.st_nlink!=1) return nil;
+    NSError *error=nil;
+    NSString *token=[NSString stringWithContentsOfFile:path
+                        encoding:NSUTF8StringEncoding error:&error];
+    if(error || !token)return nil;
+    token=[token stringByTrimmingCharactersInSet:
+              [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    return token.length>=32 ? token : nil;
+}
 static const unsigned char kInputIID[16] =
     {0xaf,0x22,0x76,0x2b,0xdf,0xac,0x48,0x46,0xaa,0x79,0xfa,0x88,0x83,0x56,0x09,0x95};
 static const unsigned char kStatusIID[16] =
@@ -460,7 +479,7 @@ static NSButton *fcButton(NSRect frame,NSString *title, id target, SEL action) {
     self.scratchShareToggle=[[NSButton alloc]
                       initWithFrame:NSMakeRect(818,12,277,30)];
     [self.scratchShareToggle setButtonType:NSButtonTypeSwitch];
-    self.scratchShareToggle.title=@"Stream frames to private browser";
+    self.scratchShareToggle.title=@"Share video with private receiver";
     self.scratchShareToggle.font=[NSFont systemFontOfSize:11];
     self.scratchShareToggle.target=self;
     self.scratchShareToggle.action=@selector(scratchShareChanged:);
@@ -512,19 +531,65 @@ static NSButton *fcButton(NSRect frame,NSString *title, id target, SEL action) {
     ((FCRelease)vt[2])(status);
 }
 - (void)sourceChanged:(id)sender {
-    BOOL hardware=self.sourceChoice.indexOfSelectedItem==0;
+    const BOOL hardware=self.sourceChoice.indexOfSelectedItem==0;
+    // Critical privacy and source-ownership boundary: never let a previous
+    // synthetic/LAN publisher survive switching to the Mac's main HDMI screen.
+    self.scratchPublisher.enabled=NO;
+    self.scratchPublisher=nil;
+    [self.scratchShareToggle setState:NSControlStateValueOff];
+    [self.scratchShareToggle setTitle:hardware?
+        @"Share HDMI with local Linux Docker":
+        @"Share generated video with private browser"];
     if(hardware) {
         [self.formatChoice selectItemAtIndex:7]; // Exact silver HDMI: 1080p30
-        // Capturing the host's primary desktop is private by default.
-        [self.scratchShareToggle setState:NSControlStateValueOff];
         [self setMessage:@"Silver HDMI loopback · 1080p30 · private preview"];
     }
-    self.formatChoice.enabled=NO; // Do not auto-scan other hardware fixtures
+    self.formatChoice.enabled=NO;
 }
 - (void)scratchShareChanged:(id)sender {
-    if (self.scratchPublisher)
-        self.scratchPublisher.enabled =
-            self.scratchShareToggle.state==NSControlStateValueOn;
+    const BOOL share=self.scratchShareToggle.state==NSControlStateValueOn;
+    if(!share) {
+        self.scratchPublisher.enabled=NO;
+        self.scratchPublisher=nil;
+        return;
+    }
+    if(self.scratchPublisher) {
+        self.scratchPublisher.enabled=YES;
+        return;
+    }
+    const BOOL hardware=self.sourceChoice.indexOfSelectedItem==0;
+    NSURL *destination=nil;
+    NSString *token=nil;
+    if(hardware) {
+        if(!fcSilverFixedBMD1080p30()) {
+            [self.scratchShareToggle setState:NSControlStateValueOff];
+            [self setMessage:@"Fixed BMD HDMI source missing. No publishing."];
+            return;
+        }
+        token=fcLocalHDMIMailboxToken();
+        destination=[NSURL URLWithString:
+             @"http://127.0.0.1:8483/api/scratch/ingest"];
+    } else {
+        NSUserDefaults *prefs=[NSUserDefaults standardUserDefaults];
+        destination=[NSURL URLWithString:
+             [prefs stringForKey:@"FountainVideoScratchEndpoint"]?:@""];
+        token=[prefs stringForKey:@"FountainVideoScratchToken"];
+    }
+    if(token.length<32 || !destination) {
+        [self.scratchShareToggle setState:NSControlStateValueOff];
+        [self setMessage:@"Private video ingest not configured; sharing remains OFF."];
+        return;
+    }
+    self.scratchPublisher=[[FCScratchPublisher alloc]
+                             initWithEndpoint:destination token:token];
+    if(!self.scratchPublisher) {
+        [self.scratchShareToggle setState:NSControlStateValueOff];
+        [self setMessage:@"Private video ingest unavailable; sharing remains OFF."];
+        return;
+    }
+    [self setMessage:hardware ?
+       @"Local HDMI mailbox publishing armed (Docker receipt checked separately)" :
+       @"Private synthetic browser publishing armed"];
 }
 - (void)openBrowserScratch:(id)sender {
     NSString *configured=[[NSUserDefaults standardUserDefaults]
@@ -761,24 +826,16 @@ static NSButton *fcButton(NSRect frame,NSString *title, id target, SEL action) {
     self.stage.notice=nil;
     self.stage.synthetic=synthetic;
     [self.stage setNeedsDisplay:YES];
-    // Identical frame-publication path for synthetic and vendor-observed
-    // video. This is user-space, explicitly labeled and never a claim that
-    // HDMI was physically verified by our source-owned driver.
-    if (self.scratchShareToggle.state==NSControlStateValueOn) {
-        if (!self.scratchPublisher) {
-            NSUserDefaults *prefs=[NSUserDefaults standardUserDefaults];
-            NSURL *endpoint=[NSURL URLWithString:
-                [prefs stringForKey:@"FountainVideoScratchEndpoint"]?:@""];
-            NSString *token=[prefs stringForKey:@"FountainVideoScratchToken"];
-            if (token.length>=32)
-                self.scratchPublisher=[[FCScratchPublisher alloc]
-                                  initWithEndpoint:endpoint token:token];
-        }
-        if (self.scratchPublisher) {
+    // Physical capture is allowed to reach ONLY the Sierra-local 8483
+    // virtio-block mailbox when explicitly opted in. Synthetic publishing
+    // retains separately configured LAN scope. No source cross-publishing.
+    if(self.scratchShareToggle.state==NSControlStateValueOn) {
+        if(!self.scratchPublisher) [self scratchShareChanged:nil];
+        if(self.scratchPublisher) {
             int64_t ptsNs=(int64_t)((long double)ticks*
                                     1000000000.0L/30000.0L);
             [self.scratchPublisher publishImage:img ptsNs:ptsNs
-                            origin:synthetic?@"synthetic":@"decklink-observed"];
+                              origin:synthetic?@"synthetic":@"decklink-observed"];
         }
     }
     if (synthetic) {
