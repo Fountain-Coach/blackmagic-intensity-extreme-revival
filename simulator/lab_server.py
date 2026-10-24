@@ -170,7 +170,16 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", default=8172, type=int)
+    parser.add_argument("--scenario", default="loopback",
+                        choices=("camera","camera-off","disconnected","mismatch",
+                                 "protected","drops","loopback","playback"))
+    parser.add_argument("--mode", default="720p50")
     args = parser.parse_args()
+    # Boot into an immediately visible entirely virtual circuit, not an
+    # empty waiting-for-physical-HDMI state. UI may reconfigure later.
+    with LAB_LOCK:
+        LAB.reset(scenario=args.scenario, mode=args.mode)
+        LAB.step(2)
     server = ThreadingHTTPServer((args.host, args.port), LabHandler)
     print("Fountain FULL SOFTWARE VIDEO LAB at http://%s:%d/lab" %
           (args.host, args.port), flush=True)
