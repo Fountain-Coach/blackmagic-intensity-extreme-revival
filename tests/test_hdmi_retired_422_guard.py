@@ -62,6 +62,16 @@ class RetiredColorModes(unittest.TestCase):
         self.assertIn('if argv==["--restore-only"]:',src)
         self.assertIn('r=bounded([HELPER,"--restore444"],3)',src)
 
+    def test_old_restore_routes_through_new_auto_restore(self):
+        src=read_file(CMOD_PY)
+        self.assertIn('RECOVERY="/tmp/fc-hdmi-ycbcr422-cyuv-bounded-trial.py"',src)
+        self.assertIn('return subprocess.call([sys.executable, RECOVERY, "--restore-only"])',src)
+        self.assertNotIn("IODisplaySetIntegerParameter(",src)
+
+    def test_old_preflight_is_retired(self):
+        ns=load_py(CMOD_PY)
+        self.assertEqual(ns["main"](["--preflight"]),65)
+
     def test_retired_cmod_script_cannot_switch(self):
         src=read_file(CMOD_PY)
         start=src.index("\ndef run_trial():\n")
