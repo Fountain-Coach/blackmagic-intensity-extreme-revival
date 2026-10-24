@@ -398,11 +398,14 @@ static NSButton *fcButton(NSRect frame,NSString *title, id target, SEL action) {
     self.deviceDetails.lineBreakMode=NSLineBreakByWordWrapping;
     self.deviceDetails.cell.wraps=YES;
     [root addSubview:self.deviceDetails];
-    NSButton *refresh=fcButton(NSMakeRect(818,50,276,36),
-                         @"Refresh device status",self,@selector(refreshPressed:));
+    NSButton *refresh=fcButton(NSMakeRect(818,50,132,36),
+                         @"Refresh hardware",self,@selector(refreshPressed:));
     [root addSubview:refresh];
+    NSButton *lab=fcButton(NSMakeRect(958,50,136,36),
+                         @"Software lab…",self,@selector(openSoftwareLab:));
+    [root addSubview:lab];
     [root addSubview:fcLabel(NSMakeRect(28,32,755,58),
-     @"Virtual video is labeled as synthetic. Real preview and recording use the existing\nDeckLink runtime. No MacBook source, kernel modification or firmware installation.",
+     @"Software simulation starts without a camera or HDMI. Open Software lab for the full\nvirtual input/output test circuit. Real hardware capture remains an optional adapter.",
                              12,muted,NO)];
     [self.window makeKeyAndOrderFront:nil];
     [NSApp activateIgnoringOtherApps:YES];
@@ -445,6 +448,23 @@ static NSButton *fcButton(NSRect frame,NSString *title, id target, SEL action) {
     int32_t lrc=((FCGetFlag)vt[3])(status,0x7669736c,&locked);
     _hardwareLocked=lrc==0 && locked;
     ((FCRelease)vt[2])(status);
+}
+- (void)openSoftwareLab:(id)sender {
+    NSString *configured=[[NSUserDefaults standardUserDefaults]
+                            stringForKey:@"FountainVideoLabURL"];
+    if (!configured.length) configured=@"http://127.0.0.1:8272/lab";
+    NSURL *destination=[NSURL URLWithString:configured];
+    NSString *scheme=[destination.scheme lowercaseString];
+    if (!destination || (![scheme isEqualToString:@"http"] &&
+                         ![scheme isEqualToString:@"https"])) {
+        [self setMessage:@"Invalid software lab URL in application preferences."];
+        return;
+    }
+    if ([[NSWorkspace sharedWorkspace] openURL:destination]) {
+        [self setMessage:@"Opening full software video laboratory."];
+    } else {
+        [self setMessage:@"Cannot open the software lab URL."];
+    }
 }
 - (void)refreshPressed:(id)sender {
     if (![self openDevice]) {
@@ -792,7 +812,11 @@ static NSButton *fcButton(NSRect frame,NSString *title, id target, SEL action) {
 }
 - (void)applicationDidFinishLaunching:(NSNotification*)notification {
     [self buildWindow];
-    [self refreshPressed:nil];
+    // Software-first. Starting Fountain Video must not enumerate real
+    // capture hardware, require a powered camera or open a DeckLink client.
+    [self.sourceChoice selectItemAtIndex:1];
+    self.deviceDetails.stringValue=@"Software simulation · hardware optional";
+    [self startPressed:nil];
 }
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication*)sender {
     return YES;
