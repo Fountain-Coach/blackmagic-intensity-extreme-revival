@@ -46,3 +46,9 @@ Thus an actual image byte stream from the physical silver computer was authentic
 - This exact boot is manually configured; the source-owned guard is scripts/alpine-guest-exclusive-com2.sh. An unattended production boot path, encrypted/authorized viewer, guest network and sustained frame-rate acceptance remain outstanding.
 
 **User-approved invariant:** Sierra remains the silver Mac's host OS, Linux Docker is its media-service guest, and the only physical Blackmagic Thunderbolt endpoint remains on Sierra.
+
+## Repeated delivery and indexed retrieval
+
+Using the same private Sierra synthetic fixture probe a **second authenticated physical-host transfer** returned HTTP **201** after **6.015 seconds**, now assigned `seq: 1`. Inside the actual silver Mac's Linux Docker receiver an independent HTTP query returned `count=2`, `oldest_seq=0`, `latest_seq=1`, and `hardware_hdmi_capture_accepted=false`. Independently retrieving `/api/scratch/frame/1.jpg` yielded **718 bytes** and the **same source SHA-256** `4982c239c16e03886c60eff9fb74d52371dcd9dee6a7dc3285c277841c4f6a70`. Both frames remain individually addressable.
+
+**This witnesses repeatability and scratch-buffer indexing, not distinct picture contents, an acceptable live frame rate, or any physical HDMI input.**
