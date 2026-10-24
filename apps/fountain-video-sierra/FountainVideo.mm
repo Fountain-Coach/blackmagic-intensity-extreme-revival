@@ -894,10 +894,12 @@ static int runWindowSelfTest(void) {
         FountainController *controller=[FountainController new];
         [controller buildWindow];
         [controller.sourceChoice selectItemAtIndex:1];
+        [controller sourceChanged:nil];
         [controller startPressed:nil];
         [[NSRunLoop currentRunLoop]
             runUntilDate:[NSDate dateWithTimeIntervalSinceNow:.45]];
-        BOOL valid=controller.virtualActive && controller.lastFrame!=nil;
+        BOOL valid=controller.virtualActive && controller.lastFrame!=nil &&
+                   controller.stage.notice==nil && !controller.formatChoice.enabled;
         [controller stopPressed:nil];
         controller.window.delegate=nil;
         [controller.window orderOut:nil];
