@@ -406,8 +406,9 @@ done:
 int main(int argc,char** argv) {
     const bool probe=argc==2&&!strcmp(argv[1],"--probe-output-1080p30");
     const bool roundtrip=argc==2&&!strcmp(argv[1],"--record-replay-1080p30");
-    if(!probe&&!roundtrip) {
-        fprintf(stderr,"usage: %s --probe-output-1080p30 | --record-replay-1080p30\n",argv[0]);
+    const bool cue=argc==2&&!strcmp(argv[1],"--monitor-cue-1080p30");
+    if(!probe&&!roundtrip&&!cue) {
+        fprintf(stderr,"usage: %s --probe-output-1080p30 | --monitor-cue-1080p30 | --record-replay-1080p30\n",argv[0]);
         return 64;
     }
     if(!sameSilverHDMIRig()) {
@@ -434,6 +435,30 @@ int main(int argc,char** argv) {
         printf("stage=output_preflight result=%s monitor_light_not_tested=1\n",
                supported?"PASS":"NOT_SUPPORTED");
         return supported?0:23;
+    }
+    if(cue) {
+        void* output=nullptr;
+        int32_t rc=query(deck.device,kOutputIID,&output);
+        bool okay=rc==0&&output&&outputModeAvailable(output);
+        bool enabled=false;
+        int32_t stop=0;
+        if(okay){
+            rc=((EnableOut)(*(void***)output)[6])(output,kMode1080p30,0);
+            printf("stage=monitor_cue_enable rc=0x%08x\n",(unsigned)rc);
+            enabled=rc==0;
+            okay=enabled;
+        }
+        if(okay)okay=cueBars(output,6);
+        if(enabled) {
+            stop=((NoArg)(*(void***)output)[7])(output);
+            printf("stage=monitor_cue_disable rc=0x%08x\n",(unsigned)stop);
+            if(stop)okay=false;
+        }
+        releaseObject(output);
+        printf("stage=monitor_cue result=%s mode=1080p30 "
+               "output_API_accepted=%d optical_display_verified=0 "
+               "HDMI_input_not_touched=1\n",okay?"API_ACCEPTED":"FAIL",okay);
+        return okay?0:31;
     }
     for(int i=0;i<kFrames;++i) {
         gRecorded[i].data=(uint8_t*)malloc(kFrameBytes);
