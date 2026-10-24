@@ -92,7 +92,7 @@ Existing minimal simulator on the same host port 8172 remains intact. The softwa
 
 ## Witnessed acceptance
 
-Ubuntu Python 3.12.3: **68 tests passed** for full-size video, sample-accurate audio, two-device link, scheduling, no-source, protected input, hot-swap continuity, half-duplex, media archive and live HTTP API. Node JavaScript syntax check passed.
+Ubuntu Python 3.12.3: **70 tests passed** for full-size video, sample-accurate audio, two-device link, scheduling, no-source, protected input, hot-swap continuity, half-duplex, media archive and live HTTP API. Node JavaScript syntax check passed.
 
 The default software loopback served from 192.168.8.50:8272 was verified locally and from the modern Mac: input and output both delivered two frames with identical YUV/audio/PTS and physical_device_access=false. Both synthetic PNG endpoints returned valid images. The browser laboratory was visually checked in headless Chrome with two working preview monitors and matched CRCs.
 
