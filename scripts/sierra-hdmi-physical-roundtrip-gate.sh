@@ -57,8 +57,8 @@ test -d "$LAB" || exit 28
 mode=$(stat -f %Lp "$LAB")
 case "$mode" in 700) ;; *) echo "stage=roundtrip_gate result=private_dir_required"; exit 29;; esac
 umask 077
-outputlog=$(mktemp "$LAB/roundtrip-output-XXXXXXXX.log")
-locklog=$(mktemp "$LAB/input-lock-XXXXXXXX.log")
+outputlog=$(mktemp "$LAB/roundtrip-output-XXXXXXXX")
+locklog=$(mktemp "$LAB/input-lock-XXXXXXXX")
 restore() {
   open -a "$APP" >/dev/null 2>&1 || :
 }
