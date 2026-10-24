@@ -130,20 +130,29 @@ int main(int argc,char**argv) {
         puts("stage=color_control result=TARGET_UNSUPPORTED");
         if(bmd)IOObjectRelease(bmd);return 23;
     }
-    if(!bmd_online){
-        puts("stage=color_control result=DISPLAY_OFFLINE_WRITE_BLOCKED");
+    if(!bmd_online && target!=kYCbCr444){
+        puts("stage=color_control result=DISPLAY_OFFLINE_NONRESTORE_BLOCKED");
         if(bmd)IOObjectRelease(bmd);return 24;
     }
-    CGDisplayModeRef mode=CGDisplayCopyDisplayMode(ids[0]);
-    if(!mode){
+    // When an HDMI colour change drops CGDisplay visibility, allow the
+    // restore-only command to address the independently identified
+    // AppleDisplay service. Never permit a new 4:2:2 trial offline.
+    if(!bmd_online && !(target==kYCbCr444 && registry_valid)){
+        puts("stage=color_control result=DISPLAY_OFFLINE_NO_SAFE_REGISTRY");
         if(bmd)IOObjectRelease(bmd);return 25;
     }
-    double hz=CGDisplayModeGetRefreshRate(mode);
-    size_t w=CGDisplayModeGetWidth(mode),h=CGDisplayModeGetHeight(mode);
-    CGDisplayModeRelease(mode);
-    if(w!=1920 || h!=1080 || hz<29.99 || hz>30.01){
-        puts("stage=color_control result=WRONG_BASELINE_DISPLAY_MODE");
-        if(bmd)IOObjectRelease(bmd);return 26;
+    if(bmd_online){
+        CGDisplayModeRef mode=CGDisplayCopyDisplayMode(ids[0]);
+        if(!mode){
+            if(bmd)IOObjectRelease(bmd);return 25;
+        }
+        double hz=CGDisplayModeGetRefreshRate(mode);
+        size_t w=CGDisplayModeGetWidth(mode),h=CGDisplayModeGetHeight(mode);
+        CGDisplayModeRelease(mode);
+        if(w!=1920 || h!=1080 || hz<29.99 || hz>30.01){
+            puts("stage=color_control result=WRONG_BASELINE_DISPLAY_MODE");
+            if(bmd)IOObjectRelease(bmd);return 26;
+        }
     }
     // Only exact original cmod values accepted on live fixture.
     if(current!=kYCbCr422 && current!=kYCbCr444){
