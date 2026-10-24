@@ -240,6 +240,9 @@ static void* kCallbackVtable[5] = {
 @end
 
 @interface FountainController ()
+- (void)appendRecordingRGBA:(NSData*)rgba width:(NSUInteger)width
+                    height:(NSUInteger)height timestamp:(CMTime)pts;
+- (void)finishRecording;
 @property(nonatomic,strong) NSWindow *window;
 @property(nonatomic,strong) VideoStage *stage;
 @property(nonatomic,strong) NSTextField *status;
@@ -793,11 +796,55 @@ static int runDeviceProbe(void) {
         return 0;
     }
 }
+static int runMovieSelfTest(void) {
+    @autoreleasepool {
+        FountainController *controller=[FountainController new];
+        NSString *name=[NSString stringWithFormat:@"FountainVideo-SYNTHETIC-%@.mov",
+                        [[NSUUID UUID] UUIDString]];
+        NSString *path=[NSTemporaryDirectory() stringByAppendingPathComponent:name];
+        controller.recordURL=[NSURL fileURLWithPath:path];
+        controller.recordRequested=YES;
+        NSData *bars=virtualBarsRGBA(320,180,0);
+        if (!bars || bars.length!=320*180*4) return 40;
+        for(int i=0;i<12;i++) {
+            [controller appendRecordingRGBA:bars width:320 height:180
+                                  timestamp:CMTimeMake(i*3000,30000)];
+            [[NSRunLoop currentRunLoop]
+                runUntilDate:[NSDate dateWithTimeIntervalSinceNow:.05]];
+        }
+        AVAssetWriter *writer=controller.writer;
+        const unsigned long long submitted=(unsigned long long)controller.movieFrames;
+        if (!writer || submitted<2) {
+            fprintf(stderr,"stage=movie_test result=no_encoded_frames count=%llu\n",
+                    submitted);
+            [[NSFileManager defaultManager] removeItemAtPath:path error:NULL];
+            return 41;
+        }
+        [controller finishRecording];
+        NSDate *deadline=[NSDate dateWithTimeIntervalSinceNow:12];
+        while (writer.status==AVAssetWriterStatusWriting &&
+               [deadline timeIntervalSinceNow]>0) {
+            [[NSRunLoop currentRunLoop]
+                runUntilDate:[NSDate dateWithTimeIntervalSinceNow:.15]];
+        }
+        NSDictionary *attrs=[[NSFileManager defaultManager]
+                              attributesOfItemAtPath:path error:NULL];
+        unsigned long long size=[[attrs objectForKey:NSFileSize] unsignedLongLongValue];
+        BOOL ok=writer.status==AVAssetWriterStatusCompleted && size>3000;
+        printf("stage=movie_test result=%s frames=%llu file_bytes=%llu"
+               " source=synthetic codec=jpeg\n",ok?"pass":"fail",submitted,size);
+        if (!ok) NSLog(@"Fountain movie test error: %@",writer.error);
+        [[NSFileManager defaultManager] removeItemAtPath:path error:NULL];
+        return ok?0:42;
+    }
+}
 int main(int argc,char **argv) {
+    if (argc==2 && !strcmp(argv[1],"--self-test-movie"))
+        return runMovieSelfTest();
     if (argc==2 && !strcmp(argv[1],"--self-test")) return runSelfTest();
     if (argc==2 && !strcmp(argv[1],"--probe")) return runDeviceProbe();
     if (argc!=1) {
-        fprintf(stderr,"usage: FountainVideo [--self-test|--probe]\n");
+        fprintf(stderr,"usage: FountainVideo [--self-test|--self-test-movie|--probe]\n");
         return 64;
     }
     @autoreleasepool {
