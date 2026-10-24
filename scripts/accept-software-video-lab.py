@@ -150,6 +150,24 @@ def run(base):
                 "same-device half-duplex rule not enforced")
     cases += 1
 
+    code, _ = read_json(base, "/api/lab/source",
+                        {"output_auto_fill": False})
+    assert_true(code == 200, "disable output auto-fill failed")
+    empty = step(base, 1)
+    assert_true(not empty["output"]["signal_present"] and
+                empty["output"]["last_frame"] is None,
+                "output underflow retained stale preview metadata")
+    assert_true(request(base, "/api/lab/output.png")[0] == 409,
+                "output underflow exposed stale video")
+    code, _ = read_json(base, "/api/lab/queue",
+                        {"pattern": "checker", "count": 1})
+    assert_true(code == 200, "output schedule recovery failed")
+    restored = step(base, 1)
+    assert_true(restored["output"]["signal_present"] and
+                restored["loopback"]["last_video_audio_pts_identical"],
+                "output underflow did not recover")
+    cases += 1
+
     return cases
 
 
