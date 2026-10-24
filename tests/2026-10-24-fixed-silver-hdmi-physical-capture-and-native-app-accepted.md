@@ -112,3 +112,21 @@ The original installed app was gracefully quit, original backup stored privately
 - Do not repeat the known-crashing `GetStreamTime`, reinstall Desktop Video 10.11.2, flash firmware, replace Sierra or rewire HDMI.
 
 **Conclusion: Hardware revival at acquisition and private preview level ACCEPTED. Continuous external Docker live capture pipeline is separately OPEN.**
+
+## Post-install live window and source-pixel inspection
+
+The final installed `~/Applications/Fountain Video.app` was launched as real GUI process **PID 8814** on the silver Mac. Approximately **4m14s** after launching, `ps` confirmed it still running with DeckLinkAPI framework loaded and Sierra/Desktop Video 10.4 unchanged. No newly timestamped FountainVideo crash reports appeared during that observation. A native read-only CoreGraphics window-list query (without capturing any desktop pixel data) reported **one onscreen window owned by PID 8814**, titled **Fountain Video**, dimensions **1120 × 722**, positioned at X400 Y88. The separate native hardware AppKit test was the direct confirmation of real pixels.
+
+Private decoded JPEG previews were independently analyzed on Ubuntu (no images published). Both were valid **320×180 RGB** JPEGs. Their decoded contents differed at **1,064 of 57,600 pixels**, with mean absolute RGB differences approximately (0.172, 0.170, 0.318), and different complete-frame and JPEG SHA-256 hashes. This provides more evidence than different hashes alone: a stable physical desktop captured at two different moments can change in a small subset of pixels.
+
+## Hardened fixed-rig acceptance runner
+
+`scripts/accept-bmd-hdmi-capture.sh` now canonically uses **only** the fixed silver HDMI source. Its default `--check` queries actual Sierra 10.12.6 host/model, original driver10.4, BMD HDMI 1920×1080@30, and presence of installed native application. Live run returned `source=ready`, `native_capture_app=running`, **without starting any second DeckLink client**.
+
+Its explicit `--run` is fail-closed when the installed GUI is already running. That guard was independently tested live and returned exit **40** (`client_already_running`, `no_concurrent_vendor_access=1`). The command no longer uses a MacBook BMD EDID, old Nikon mode scan or crashing `GetStreamTime` observer. `scripts/sierra-hdmi-loopback-preflight.sh` also distinguishes its no-vendor-call inspection from the separate **already accepted** physical capture witness, avoiding a false `NOT_ACCEPTED` summary.
+
+## Confidential live Docker publishing — separately unaccepted
+
+An encrypted, two-hop **loopback-only SSH forward** was temporarily established and actually verified from the silver Mac to `127.0.0.1:8373` in Ubuntu Docker, without granting Sierra `vmnet` entitlements or exposing a LAN listener. A new **explicit opt-in** `--self-test-fixed-silver-hdmi-live-docker` candidate was compiled. With no private receiver credential made available to that candidate, it correctly **failed closed before hardware I/O** (`result=missing_private_secret`, exit **71**). No secret was copied to Sierra, no private desktop frame published by this candidate, and both temporary SSH tunnels were closed by their control sockets.
+
+This means the user-owned native **capture and preview are functional and installed**; **unattended live HDMI-to-Docker streaming has NOT been accepted and was NOT enabled**. The two earlier physical JPEGs accepted inside Ubuntu Docker remain the valid bounded real-frame transport witness. Avoid silently enabling network sharing of the silver Mac's primary display.
