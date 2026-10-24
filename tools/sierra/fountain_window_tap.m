@@ -288,10 +288,11 @@ int main(int argc,const char**argv) {
         NSOpenGLContext *gl=nil;SyphonServer *server=nil;
         if(fixturePublish||publishing) {
             if(!makeGL(&gl)){puts("stage=window_tap result=GL_NOT_AVAILABLE");return 67;}
-            server=[[SyphonServer alloc] initWithName:@"Fountain Window Tap"
+            server=[[SyphonServer alloc] initWithName:(fixturePublish?@"Fountain Window Tap Test":@"Fountain Window Tap")
                                 context:[gl CGLContextObj] options:nil];
             if(!server){puts("stage=window_tap result=SYPHON_SERVER_NOT_AVAILABLE");return 68;}
-            puts("stage=window_tap syphon_server=Fountain_Window_Tap transport=local_only");
+            printf("stage=window_tap syphon_server=%s transport=local_only\n",
+                fixturePublish?"Fountain_Window_Tap_Test":"Fountain_Window_Tap");
         }
         unsigned total=fixturePublish?20:publishing?20:selfTest?2:1;
         NSString *firstHash=nil,*lastHash=nil;
