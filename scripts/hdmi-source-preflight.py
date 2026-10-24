@@ -11,6 +11,7 @@ Usage:
 Exit 0: expected BMD HDMI sink and matching source computer display timing.
 Exit 2: no BMD HDMI sink.
 Exit 3: BMD HDMI present but source timing mismatched or unavailable.
+Exit 4: more than one BMD HDMI endpoint is present (ambiguous source).
 Exit 20: display inventory failed or had no data.
 Exit 64: invalid arguments.
 """
@@ -68,7 +69,7 @@ def timing_matches(label, expected):
         return False
     width, height, hz = expected
     return (int(match.group(1)) == width and int(match.group(2)) == height and
-            abs(float(match.group(3)) - hz) <= 0.05)
+            abs(float(match.group(3)) - hz) <= 0.01)
 
 
 def evaluate(displays, mode_name):
@@ -77,7 +78,9 @@ def evaluate(displays, mode_name):
                   if d["online"] and d["name"].strip() == BMD_NAME]
     if not candidates:
         return 2
-    if not any(timing_matches(d["timing"], expected) for d in candidates):
+    if len(candidates) != 1:
+        return 4
+    if not timing_matches(candidates[0]["timing"], expected):
         return 3
     return 0
 
@@ -107,7 +110,8 @@ def main(argv=None):
     status = evaluate(displays, args.mode)
     reason = {0: "edid_and_timing_witnessed_only",
               2: "bmd_endpoint_not_witnessed",
-              3: "bmd_endpoint_timing_mismatch"}[status]
+              3: "bmd_endpoint_timing_mismatch",
+              4: "multiple_bmd_endpoints_ambiguous"}[status]
     print("stage=source_preflight result=%s requested_mode=%s"
           " source_video_and_hdcp_unverified=1" % (reason, args.mode))
     return status
