@@ -100,3 +100,13 @@ Do not add this unstable path to the automatic video simulator acceptance suite.
 A future physical acceptance witness must establish a lock, receive one or more actual non-no-source frames, extract valid pixel bytes and timestamps, and demonstrate a safe stream shutdown without process crash. Then inspect Browser Scratch for the new non-synthetic source label while maintaining separate source provenance.
 
 Source-owned inventory tool: [sierra-hdmi-loopback-readonly.sh](../scripts/sierra-hdmi-loopback-readonly.sh). Existing manual capture source: [decklink-input-observer.cpp](../src/decklink-input-observer.cpp). Physical task: issue #8.
+
+## 24 October follow-up: idle, read-only status query
+
+A new source-owned `src/decklink-signal-status-readonly.cpp` was compiled and run on the actual Sierra 10.12.6 host **without enabling video input or starting streams**. It only enumerates the original DeckLink device and reads IDeckLinkStatus:
+
+    stage=readonly_status status_interface=0x00000000 present=1
+    stage=readonly_input_signal result=observed queried_without_streams=1 lock_query_rc=0x80000008 locked=0 mode_query_rc=0x80000001 mode=0x0 real_frame_verified=0
+    stage=safety vendor_input_enable=0 start_streams=0 framebuffer_read=0 vendor_driver_changes=0 pci_mmio=0 firmware_update=0
+
+The status interface exists; **the idle lock query returned an error** (`0x80000008`) rather than a trustworthy positive or negative lock measurement. An uninitialized boolean printed as zero is *not* a verified unlocked receiver. The detected-mode query also failed. Do **not** treat this as new physical-capture failure evidence or re-enter the crashing stream solely to populate this field. The prior active-stream attempt remains the last hazardous real-input test; capture is NOT ACCEPTED.
