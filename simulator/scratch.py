@@ -14,6 +14,7 @@ from __future__ import annotations
 from collections import deque
 from dataclasses import dataclass
 from threading import RLock
+import re
 import time
 
 MAX_FRAME_BYTES = 1_048_576
@@ -30,6 +31,7 @@ class ScratchFrame:
     data: bytes
     pts_ns: int
     origin: str
+    stream_id: str
     width: int
     height: int
     created_at: float
@@ -37,7 +39,8 @@ class ScratchFrame:
     @property
     def metadata(self):
         return {"seq": self.seq, "pts_ns": self.pts_ns,
-                "origin": self.origin, "simulated": self.origin == "synthetic",
+                "origin": self.origin, "stream_id": self.stream_id,
+                "simulated": self.origin == "synthetic",
                 "physical_hdmi_verified": False,
                 "width": self.width, "height": self.height,
                 "jpeg_bytes": len(self.data)}
@@ -59,7 +62,8 @@ class ScratchHistory:
         self._epoch = 0
         self._last_epoch_reason = "initial"
 
-    def push(self, image, pts_ns, origin, width, height):
+    def push(self, image, pts_ns, origin, width, height,
+             stream_id="unspecified"):
         if not isinstance(image, bytes) or not image.startswith(b"\xff\xd8") or \
            not image.endswith(b"\xff\xd9"):
             raise InvalidFrame("Expected a complete JPEG frame")
@@ -69,6 +73,9 @@ class ScratchHistory:
             raise InvalidFrame("Invalid frame timestamp")
         if origin not in VALID_ORIGINS:
             raise InvalidFrame("Unrecognized frame provenance")
+        if not isinstance(stream_id,str) or not re.fullmatch(
+                r"[A-Za-z0-9-]{1,64}",stream_id):
+            raise InvalidFrame("Unrecognized stream session")
         if type(width) is not int or type(height) is not int or \
            not 1 <= width <= 4096 or not 1 <= height <= 2160:
             raise InvalidFrame("Invalid frame geometry")
@@ -77,10 +84,20 @@ class ScratchHistory:
         with self._lock:
             if self._items:
                 prior=self._items[-1]
-                if origin != prior.origin or pts_ns < prior.pts_ns:
+                reason = None
+                if origin != prior.origin:
+                    reason = "source_changed"
+                elif stream_id != prior.stream_id:
+                    reason = "stream_session_changed"
+                elif pts_ns < prior.pts_ns:
+                    if prior.pts_ns-pts_ns <= 1_000_000_000:
+                        # Two async network posts may be delivered out of
+                        # order; that must not destroy the valid history.
+                        raise InvalidFrame("OUT_OF_ORDER_FRAME")
+                    reason = "timestamp_rollback"
+                if reason:
                     self._epoch += 1
-                    self._last_epoch_reason = ("source_changed" if origin != prior.origin
-                                               else "timestamp_rollback")
+                    self._last_epoch_reason = reason
                     self._evicted += len(self._items)
                     self._items.clear()
                     self._index.clear()
@@ -88,7 +105,7 @@ class ScratchHistory:
             seq = self._next_seq
             self._next_seq += 1
             item = ScratchFrame(seq, image, pts_ns, origin,
-                                width, height, self._clock())
+                                stream_id, width, height, self._clock())
             self._items.append(item)
             self._index[seq] = item
             self._byte_count += len(image)
