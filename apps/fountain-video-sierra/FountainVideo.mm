@@ -860,7 +860,11 @@ static int runAutoScanSelfTest(void) {
                (unsigned)(!controller.captureActive),(unsigned)noSource);
         [controller stopCurrent:NO];
         [controller closeDevice];
+        controller.window.delegate=nil;
+        [controller.window orderOut:nil];
         [controller.window close];
+        controller.window=nil;
+        app.delegate=nil;
         return ended&&noSource ? 0 : 44;
     }
 }
