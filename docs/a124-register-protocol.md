@@ -31,15 +31,18 @@ The new [SHA-pinned static output verifier](../scripts/inspect_private_output_di
 
 1. HDExtreme SetVideoOutputMode has VM address 0x2d2ac.
 2. Its inherited HDProPCIExpress raw-vtable call at offset 0x280 resolves to HDPro SetVideoOutputMode at 0x1846e.
-3. HDPro SetVideoOutputMode itself invokes an inherited HD output mode routine, then uses device virtual dispatch. Its hardware effects still require detailed tracing.
-4. HDExtreme mode follow-up through its object vtable address point plus offset 0x810 resolves to AutoSwitch3DPackingFormat at 0x32404.
-5. HDExtreme ReadOutputEDID is present at 0x2ec88 and WriteHdmiSinkCapabilityBits at 0x2f3fa.
-6. Static WriteHdmiSinkCapabilityBits contains readiness guards at object offsets 0x289/0x28a/0x28b, cached sink-capability fields, and indirect masked operations. None is yet identified as the output PHY OFF register.
+3. HDPro SetVideoOutputMode in turn calls the root DeckLink SetVideoOutputMode method through the raw HD vtable offset 0x280; the exact pointer resolves to 0x103ce.
+4. HDPro then uses the HDExtreme object vtable address point plus offset 0x7d8 to invoke HDExtreme WriteVideoOutputConversionBits at 0x32140. The static call chain does NOT prove that this is the transmitter electrical OFF operation or its actual register.
+5. HDExtreme mode follow-up through its object vtable address point plus offset 0x810 resolves to AutoSwitch3DPackingFormat at 0x32404.
+6. HDExtreme ReadOutputEDID is present at 0x2ec88 and WriteHdmiSinkCapabilityBits at 0x2f3fa.
+7. Static WriteHdmiSinkCapabilityBits contains readiness guards at object offsets 0x289/0x28a/0x28b, cached sink-capability fields, and indirect masked operations. None is yet identified as the output PHY OFF register.
 
 Result from the locally held original SHA-verified binary:
 
     status=static_output_mode_dispatch_verified
+    root_mode_target=0x103ce
     base_mode_target=0x1846e
+    conversion_bits_target=0x32140
     follow_up_target=0x32404
     hdmi_phy_off_register_resolved=false
     hdmi_tx_electrical_state_observed=false
