@@ -82,7 +82,8 @@ def all_symbols(data: bytes) -> dict[str, int]:
     names = data[stroff:stroff + strsize]
     wanted = {HD_VTABLE, EXTREME_VTABLE, HD_BASE_MODE, EXTREME_MODE,
               EXTREME_3D, EXTREME_EDID, EXTREME_SINK}
-    result = {}\n    for i in range(nsyms):
+    result = {}
+    for i in range(nsyms):
         string_offset, _, _, _, addr = struct.unpack_from(
             "<IBBHQ", data, symoff + 16 * i
         )
