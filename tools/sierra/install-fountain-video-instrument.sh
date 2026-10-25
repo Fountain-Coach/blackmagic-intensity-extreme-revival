@@ -22,6 +22,17 @@ if launchctl print "$SERVICE" 2>/dev/null | grep -q 'state = running'; then
   echo 'install=BLOCKED reason=active_panasonic_show' >&2
   exit 30
 fi
+# A distinct local authority disabled both proposed runtime wrappers and
+# removed execute permission from the physical HDMI adapter. Do not turn
+# a routine reinstall into an accidental bypass of that unresolved decision.
+PFX="$HOME/Library/Application Support/Fountain Coach/Video Instrument"
+OUT="$PFX/bin/fountain-video-output"
+if [ -e "$HOME/Applications/Fountain Panasonic Show.app.disabled" ] ||
+   [ -e "$HOME/Library/LaunchAgents/coach.fountain.video.panasonic.plist.disabled" ] ||
+   { [ -f "$OUT" ] && [ ! -x "$OUT" ]; }; then
+  echo 'install=BLOCKED reason=local_panasonic_runtime_disabled' >&2
+  exit 65
+fi
 FRAMEWORK="/Applications/Syphon Recorder.app/Contents/Frameworks/Syphon.framework"
 if [ ! -f "$FRAMEWORK/Syphon" ]; then
   echo 'install=BLOCKED reason=existing_Syphon_framework_missing' >&2
