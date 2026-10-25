@@ -41,7 +41,7 @@ Four previously invokable source-owned 4:2:2 experiments are **retired and fail 
 - [cyuv bounded 422 trial](../tools/sierra/hdmi-ycbcr422-cyuv-bounded-trial.py) rejects `--trial-422` with **65**; the direct `run_trial()` function also raises before hardware access. Restore-only remains supported.
 - [Legacy cmod bounded 422 trial](../tools/sierra/hdmi-ycbcr422-bounded-trial.py) likewise rejects its trial command and direct function calls.
 
-[Regression suite](test_hdmi_retired_422_guard.py): **9/9 on Sierra Python 2.7, modern macOS Python 3, and Ubuntu Python 3**. It verifies C source guard ordering before setters, direct Python invocation fails closed and automatic restoration remains callable.
+[Regression suite](test_hdmi_retired_422_guard.py): **14/14 on Sierra Python 2.7, modern macOS Python 3, and Ubuntu Python 3**. It verifies C source guard ordering before setters, direct Python invocation fails closed and automatic restoration remains callable.
 
 **Live Sierra installation acceptance:** both C helpers were recompiled using the original Sierra Clang with strict warnings, installed over their old `/tmp` diagnostic executables, and all four old trial entrypoints were run. Each returned **65** without changing hardware. The installed `--restore-only` returned **True**; live independent selected-mode readback remained `cmod=0x100`, `cyuv=0x10000000`, BMD HDMI 1080p30 online.
 
@@ -56,3 +56,11 @@ Four previously invokable source-owned 4:2:2 experiments are **retired and fail 
 **Next path:** do **not** patch Sierra graphics drivers, install an EDID override, re-enable crash-prone `StartStreams`, or repeat the forced 4:2:2 source request. Continue independent evidence gathering for receiver link/format status and legacy source capabilities. Any future physical colour-source experiment must use a proven *actual 4:2:2 source*, not merely a driver property naming that format, and must preserve the current fixed cabling contract unless the owner explicitly changes it.
 
 **Hardware acceptance D4: OPEN.** No current physical receiver lock; original source restored and guard paths verified.
+
+## Legacy path reconciliation and final validation
+
+The old cmod Python entrypoint is now a **fail-closed compatibility shim**. The retired `--trial-422`, `--preflight` and `--watchdog` return **65**, without starting hardware procedures; `--restore-only` forwards directly to the supported cyuv automatic-colour restoration script. The shim handles both source-tree sibling naming and the known `fc-`-prefixed Sierra `/tmp` diagnostic installation path; no PATH search or arbitrary program resolution is involved.
+
+An initial compatibility iteration failed its test suite because Python import-style execution omitted `__file__`, and a subsequent real installed-path check uncovered the `fc-` filename difference. Both issues were repaired and the full checks rerun. **14/14 tests now pass on each of Sierra, modern macOS, and Ubuntu.** Physical Sierra execution of the installed legacy `--restore-only` returned `external_restore=True`; its old preflight, watchdog and 4:2:2 trial each returned expected refusal **65**. Final source inspection remained BMD HDMI **1920×1080@30**, `cyuv=automatic`, `cmod=YCbCr444`.
+
+The successful restoration was **idempotent**: the original colour was already selected. It does not establish that a newly induced graphics failure can always be automatically recovered.
