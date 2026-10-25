@@ -121,6 +121,9 @@ int main(void){
         puts("stage=samsung_ddc result=NO_VERIFIED_MONITOR_RESPONSE");
         return 27;
     }
+    printf("stage=samsung_ddc raw_reply=");
+    for(size_t i=0;i<11;i++) printf("%02x",(unsigned)reply[i]);
+    puts("");
     uint8_t sum=0x6f^0x51;
     for(size_t i=0;i<10;i++)sum^=reply[i];
     int correct=reply[0]==0x6e && reply[2]==0x02 &&
