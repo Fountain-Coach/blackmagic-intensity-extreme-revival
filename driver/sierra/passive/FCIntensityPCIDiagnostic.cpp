@@ -10,6 +10,7 @@
 #include <IOKit/IOService.h>
 #include <IOKit/IODeviceMemory.h>
 #include <IOKit/pci/IOPCIDevice.h>
+#include "../../common/a124_safety.h"
 
 class FCIntensityPCIDiagnostic : public IOService {
     OSDeclareDefaultStructors(FCIntensityPCIDiagnostic);
@@ -49,10 +50,26 @@ bool FCIntensityPCIDiagnostic::start(IOService *provider) {
     if (bytes0 != 1024UL * 1024UL || bytes1 != 1024UL * 1024UL)
         return false;
 
+    /* The shared A124 contract is PURE: no MMIO, DMA, IRQ or output
+     * programming. It can only validate the known resource inventory
+     * and preserve the owner STOP, not establish physical HDMI silence.
+     */
+    FCA124Safety safety;
+    fc_a124_safety_init(&safety);
+    FCA124Inventory inventory = {
+        vendor, device, (uint32_t)bytes0, (uint32_t)bytes1,
+        FC_A124_SOURCE_PCI_INVENTORY
+    };
+    if (fc_a124_note_inventory(&safety, &inventory) !=
+        FC_A124_RESULT_ACCEPTED || !safety.owner_stop_latched)
+        return false;
+
     if (!IOService::start(provider))
         return false;
 
     setProperty("FCPCIReadOnly", true);
+    setProperty("FCSoftwareOutputStopLatched", true);
+    setProperty("FCPhysicalHDMIOutputOffProven", false);
     setProperty("FCVendorID", (unsigned long long)vendor, 16);
     setProperty("FCDeviceID", (unsigned long long)device, 16);
     setProperty("FCBAR0Bytes", (unsigned long long)bytes0, 64);
