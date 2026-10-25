@@ -29,6 +29,32 @@ static inline uint8_t fc_clip_u8(int a) {
     return (uint8_t)(a<0?0:(a>255?255:a));
 }
 
+/* A tiny owned 5x7 title alphabet for the video score. No font download. */
+static inline uint8_t fc_letter_row(char c,int row) {
+    static const uint8_t D[]={30,17,17,17,17,17,30};
+    static const uint8_t I[]={31,4,4,4,4,4,31};
+    static const uint8_t E[]={31,16,16,30,16,16,31};
+    static const uint8_t M[]={17,27,21,21,17,17,17};
+    static const uint8_t A[]={14,17,17,31,17,17,17};
+    static const uint8_t S[]={15,16,16,14,1,1,30};
+    static const uint8_t C[]={15,16,16,16,16,16,15};
+    static const uint8_t H[]={17,17,17,31,17,17,17};
+    static const uint8_t N[]={17,25,21,19,17,17,17};
+    if(row<0||row>=7)return 0;
+    switch(c){
+      case 'D':return D[row];
+      case 'I':return I[row];
+      case 'E':return E[row];
+      case 'M':return M[row];
+      case 'A':return A[row];
+      case 'S':return S[row];
+      case 'C':return C[row];
+      case 'H':return H[row];
+      case 'N':return N[row];
+      default:return 0;
+    }
+}
+
 static inline fc_rgb fc_video_score_pixel(int x,int y,int w,int h,uint32_t frame) {
     /* Integer-only renderer. The whole image has a readable visual clock. */
     int phase=(int)(frame%1800u);
@@ -65,6 +91,58 @@ static inline fc_rgb fc_video_score_pixel(int x,int y,int w,int h,uint32_t frame
     if (y>h*91/100 && y<h*97/100 && x>=w/18 && x<w*9/18) {
         int unit=fc_min_i(9,(x-w/18)*10/(w*8/18+1));
         if (((frame/3u)>>unit)&1u) {p.r=205;p.g=173;p.b=84;}
+    }
+    /* Four cinematic movements, alternating every 600 output frame counts:
+       an articulated eye, an amber shot/reverse, a silver negative and a
+       drawn title. The Syphon preview and HDMI share these exact pixels. */
+    const int movement=(int)((frame/600u)%4u);
+    if(movement==1){
+        int stripe=(x*19+y*3+phase*23)%311;
+        int copper=(((x/31)+(y/57)+(int)(frame/24u))%13)<5;
+        p.r=(uint8_t)(copper?151+grain:34+grain);
+        p.g=(uint8_t)(copper?93+grain:88+grain);
+        p.b=(uint8_t)(copper?46:113+grain);
+        if(stripe<9){p.r=228;p.g=190;p.b=127;}
+        if(radius2>181*181&&radius2<193*193){
+            p.r=245;p.g=225;p.b=188;
+        }
+        if(y>h/5 && y<h*4/5 && fc_abs_i(x-w/2)<5){
+            p.r=248;p.g=229;p.b=182;
+        }
+    } else if(movement==2){
+        int pillar=(x+(int)(frame%300u)*5)%(w/3+1);
+        int window=(pillar>w/15 && pillar<w/5 &&
+                    y>h/7 && y<h*6/7);
+        p.r=(uint8_t)(204-grain*2);
+        p.g=(uint8_t)(214-grain);
+        p.b=(uint8_t)(196-grain);
+        if(window){p.r=37;p.g=64;p.b=81;}
+        if(((x*3+y*11+phase*7)%239)<6){
+            p.r=54;p.g=79;p.b=88;
+        }
+        if(radius2<120*120){p.r=189;p.g=42;p.b=54;}
+        if(fc_abs_i(x-w/2)<4){p.r=26;p.g=43;p.b=57;}
+    } else if(movement==3){
+        int band=(((x*5+y*7+(int)(frame%240u)*11)%401)<12);
+        p.r=(uint8_t)(11+grain/3);
+        p.g=(uint8_t)(19+grain/2);
+        p.b=(uint8_t)(29+grain);
+        if(band){p.r=45;p.g=90;p.b=100;}
+        if(y>h*9/10){p.r=150;p.g=41;p.b=55;}
+        const char* title="DIE MASCHINE";
+        const int scale=w/160>1?w/160:2;
+        const int title_width=12*6*scale;
+        const int x0=(w-title_width)/2;
+        const int y0=h/2-4*scale;
+        if(x>=x0 && x<x0+title_width &&
+           y>=y0 && y<y0+7*scale){
+            const int lx=(x-x0)/scale,ly=(y-y0)/scale;
+            const int character=lx/6, column=lx%6;
+            if(column<5 &&
+               (fc_letter_row(title[character],ly)&(1u<<(4-column)))){
+                p.r=238;p.g=227;p.b=191;
+            }
+        }
     }
     return p;
 }
