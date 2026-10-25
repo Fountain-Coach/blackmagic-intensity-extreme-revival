@@ -15,6 +15,13 @@ if [ "$(sysctl -n hw.model)" != "Macmini5,3" ]; then
   echo 'install=BLOCKED reason=not_silver_Macmini5_3' >&2
   exit 21
 fi
+# Never replace the hardware-output executable during an active
+# launchd-owned Panasonic performance, even if rename would be atomic.
+SERVICE="gui/$(id -u)/coach.fountain.video.panasonic"
+if launchctl print "$SERVICE" 2>/dev/null | grep -q 'state = running'; then
+  echo 'install=BLOCKED reason=active_panasonic_show' >&2
+  exit 30
+fi
 FRAMEWORK="/Applications/Syphon Recorder.app/Contents/Frameworks/Syphon.framework"
 if [ ! -f "$FRAMEWORK/Syphon" ]; then
   echo 'install=BLOCKED reason=existing_Syphon_framework_missing' >&2
@@ -25,7 +32,8 @@ if [ ! -r "$SOURCE/fountain-video-score.h" ] ||
    [ ! -r "$SOURCE/fountain-syphon-instrument.m" ] ||
    [ ! -r "$SOURCE/fountain-video-output.cpp" ] ||
    [ ! -r "$ROOT/tools/sierra/fountain-syphon-frame-witness.m" ] ||
-   [ ! -r "$ROOT/tests/test_fountain_video_score.c" ]; then
+   [ ! -r "$ROOT/tests/test_fountain_video_score.c" ] ||
+   [ ! -r "$ROOT/tools/sierra/fountain-panasonic-show.sh" ]; then
    echo 'install=BLOCKED reason=source_tree_incomplete' >&2
    exit 23
 fi
@@ -92,7 +100,13 @@ if [ -e "$DEST" ]; then
   echo "install=previous_bundle_retained_for_rollback path=$BACKUP"
 fi
 mv "$APP" "$DEST"
+if [ -x "$PREFIX/bin/fountain-video-output" ]; then
+   cp "$PREFIX/bin/fountain-video-output" "$PREFIX/tmp/fountain-video-output.last-good.$(date +%Y%m%d%H%M%S)"
+fi
 mv -f "$STAGE/fountain-video-output" "$PREFIX/bin/fountain-video-output"
+sh -n "$ROOT/tools/sierra/fountain-panasonic-show.sh"
+cp "$ROOT/tools/sierra/fountain-panasonic-show.sh" "$PREFIX/bin/fountain-panasonic-show.sh"
+chmod 755 "$PREFIX/bin/fountain-panasonic-show.sh"
 mv -f "$STAGE/test_fountain_video_score" "$PREFIX/bin/test_fountain_video_score"
 if [ -e "$PREFIX/bin/FountainSyphonWitness.app" ]; then
    rm -rf "$PREFIX/bin/FountainSyphonWitness.app"
