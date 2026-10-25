@@ -80,8 +80,7 @@ def all_symbols(data: bytes) -> dict[str, int]:
     if stroff + strsize > len(data):
         raise ValueError("invalid string table")
     names = data[stroff:stroff + strsize]
-    result = {}
-    for i in range(nsyms):
+    wanted = {HD_VTABLE, EXTREME_VTABLE, HD_BASE_MODE, EXTREME_MODE,\n              EXTREME_3D, EXTREME_EDID, EXTREME_SINK}\n    result = {}\n    for i in range(nsyms):
         string_offset, _, _, _, addr = struct.unpack_from(
             "<IBBHQ", data, symoff + 16 * i
         )
@@ -91,9 +90,7 @@ def all_symbols(data: bytes) -> dict[str, int]:
         if end == -1:
             raise ValueError("unterminated Mach-O name")
         name = names[string_offset:end].decode("ascii", "replace")
-        if name in result:
-            raise ValueError("duplicate symbol " + name)
-        result[name] = addr
+        if name not in wanted:\n            continue\n        if name in result:\n            raise ValueError("duplicate required symbol " + name)\n        result[name] = addr
     return result
 
 def pointer(data: bytes, virtual_address: int) -> int:
