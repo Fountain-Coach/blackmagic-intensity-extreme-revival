@@ -18,12 +18,16 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/time.h>
+#include <sys/sysctl.h>
 #include <unistd.h>
 #include "fountain-video-score.h"
 
 typedef int32_t (*Query)(void*,CFUUIDBytes,void**);
 typedef uint32_t (*Release)(void*);
 typedef int32_t (*Next)(void*,void**);
+typedef int32_t (*GetModelName)(void*,CFStringRef*);
+typedef int32_t (*GetConfigInt)(void*,uint32_t,int64_t*);
+
 typedef int32_t (*Enable)(void*,uint32_t,uint32_t);
 typedef int32_t (*Disable)(void*);
 typedef int32_t (*CreateFrame)(void*,int32_t,int32_t,int32_t,uint32_t,uint32_t,void**);
@@ -34,6 +38,65 @@ typedef void* (*Factory)(void);
 static const uint8_t outputIID[16] = {
    0xcc,0x5c,0x8a,0x6e,0x3f,0x2f,0x4b,0x3a,
    0x87,0xea,0xfd,0x78,0xaf,0x30,0x05,0x64};
+static const uint8_t attrsIID[16]={
+  0xab,0xc1,0x18,0x43,0xd9,0x66,0x44,0xcb,
+  0x96,0xe2,0xa1,0xcb,0x5d,0x31,0x35,0xc4
+};
+static const uint8_t configIID[16]={
+  0x1e,0x69,0xfc,0xf6,0x42,0x03,0x49,0x36,
+  0x80,0x76,0x2a,0x9f,0x4c,0xfd,0x50,0xcb
+};
+static int original_sierra(void){
+   char model[64]={0},kernel[64]={0};
+   size_t ml=sizeof(model),kl=sizeof(kernel);
+   return !sysctlbyname("hw.model",model,&ml,NULL,0) &&
+          !sysctlbyname("kern.osrelease",kernel,&kl,NULL,0) &&
+          !strcmp(model,"Macmini5,3") && !strncmp(kernel,"16.",3);
+}
+static int device_owned_and_idle(void* device){
+   CFStringRef cf=NULL;
+   int32_t rc=((GetModelName)(*(void***)device)[3])(device,&cf);
+   if(rc||!cf){puts("stage=hardware_guard result=MODEL_UNAVAILABLE");return 0;}
+   char name[128]={0};
+   int recognized=CFStringGetCString(cf,name,sizeof(name),kCFStringEncodingUTF8);
+   CFRelease(cf);
+   if(!recognized||strcmp(name,"Intensity Extreme")){
+      printf("stage=hardware_guard result=WRONG_DEVICE model=%s\n",name);
+      return 0;
+   }
+   CFUUIDBytes id;void* obj=NULL;
+   memcpy(&id,attrsIID,16);
+   rc=((Query)(*(void***)device)[0])(device,id,&obj);
+   if(rc||!obj){puts("stage=hardware_guard result=NO_ATTRIBUTES");return 0;}
+   int64_t busy=-1;
+   int32_t brc=((GetConfigInt)(*(void***)obj)[4])(obj,0x64627374u,&busy);
+   ((Release)(*(void***)obj)[2])(obj);
+   printf("stage=hardware_guard busy_read_rc=0x%08x busy=0x%llx\n",
+          (unsigned)brc,(unsigned long long)busy);
+   if(brc||busy!=0){
+       puts("stage=hardware_guard result=DEVICE_BUSY_OR_UNKNOWN");
+       return 0;
+   }
+   memcpy(&id,configIID,16);
+   obj=NULL;
+   rc=((Query)(*(void***)device)[0])(device,id,&obj);
+   if(rc||!obj){puts("stage=hardware_guard result=NO_CONFIG_READ");return 0;}
+   int64_t connection=-1;
+   int32_t crc=((GetConfigInt)(*(void***)obj)[6])(
+       obj,0x766f636eu,&connection);
+   ((Release)(*(void***)obj)[2])(obj);
+   printf("stage=hardware_guard output_config_rc=0x%08x"
+          " selected_output_mask=0x%llx HDMI_bit=0x2\n",
+          (unsigned)crc,(unsigned long long)connection);
+   if(crc || !(connection & 2)){
+       puts("stage=hardware_guard result=HDMI_OUTPUT_NOT_SELECTED");
+       return 0;
+   }
+   puts("stage=hardware_guard result=PASS"
+        " original_silver_sierra=1 Intensity_Extreme=1"
+        " device_idle=1 HDMI_output_selected=1");
+   return 1;
+}
 static volatile sig_atomic_t stop_requested=0;
 static void stop_handler(int x){(void)x;stop_requested=1;}
 static void release_obj(void* p){
@@ -60,6 +123,10 @@ int main(int argc,char**argv){
        if(!end || *end || requested<5 || requested>120)return 64;
        seconds=(int)requested;
     }
+    if(!original_sierra()){
+        puts("stage=hardware_guard result=WRONG_ORIGINAL_HOST");
+        return 20;
+    }
     const bool hd=(strcmp(argv[2],"720p60")!=0);
     const int width=hd?1920:1280,height=hd?1080:720,rate=hd?25:60;
     const uint32_t code=hd?0x48703235u:0x68703630u;
@@ -76,6 +143,10 @@ int main(int argc,char**argv){
     if(rc||!device){
         printf("stage=output result=no_physical_device rc=0x%08x\n",(unsigned)rc);
         dlclose(lib);return 22;
+    }
+    if(!device_owned_and_idle(device)){
+        release_obj(device);dlclose(lib);
+        return 23;
     }
     CFUUIDBytes iid;memcpy(&iid,outputIID,16);
     void* out=NULL;
