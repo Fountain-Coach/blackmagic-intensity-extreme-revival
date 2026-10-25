@@ -35,6 +35,12 @@ if [ -e "$DISABLED_APP" ] || [ -e "$DISABLED_AGENT" ] ||
 fi
 case "$1" in
  start)
+  # Owner-directed emergency stop. Prevent GUI or launch services from
+  # creating a new Blackmagic playback session, even after reinstall.
+  if [ -f "$BASE/run/OUTPUT_DISABLED" ];then
+    echo "stage=show result=BLOCKED_OWNER_HARDWARE_STOP"
+    exit 65
+  fi
   [ -x "$EXEC" ] || { echo "stage=show result=NO_OWNED_APP";exit 20; }
   if pid=$(owned_pid);then
     echo "stage=show result=ALREADY_RUNNING owner=AppKit pid=$pid"
