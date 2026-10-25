@@ -1,4 +1,4 @@
-# Samsung U28E590 through i-tec — direct full-screen creative display
+# Samsung U28E590 through i-tec — host-side fullscreen, physical display FAILURE
 
 Date: 25 October 2026, original silver Macmini5,3 running macOS Sierra 10.12.6.
 
@@ -66,7 +66,7 @@ This establishes actual changing generated pixels across the independent GPU pub
 - Original Blackmagic A124 device busy state: `0x0` (IDLE).
 - **No Blackmagic hardware output was re-enabled**; its physical HDMI OUT remains disconnected from Samsung.
 
-The visual instrument is a direct Mac display application, not the pending independent Intensity driver. The original A124 hardware driver and Panasonic-named historical test branch remain a separate engineering problem. This preview makes the creative score useful immediately without claiming the hardware-revival acceptance.
+The visual instrument is a direct Mac display application, not the pending independent Intensity driver. The original A124 hardware driver and Panasonic-named historical test branch remain a separate engineering problem. This host-side preview did NOT establish a usable physical screen; the owner observed BLACK. No creative display acceptance was reached.
 
 ## Current acceptance
 
@@ -78,7 +78,7 @@ The visual instrument is a direct Mac display application, not the pending indep
 | Actual nonblank full-screen window image captured | PASS |
 | Changing generated Syphon frames in second process | PASS |
 | Blackmagic output lock preserved; hardware idle | PASS |
-| Optical confirmation from Samsung's physical display | **AWAITING OWNER OBSERVATION** |
+| Samsung physical display via i-tec | **FAILED — owner reports BLACK, after full-screen launch and 1080p60 change** |
 | Independent Blackmagic HDMI output/capture driver | **NOT IMPLEMENTED / SEPARATE** |
 
 ## Later black-screen observation and read-only input diagnostics (08:34–08:55)
