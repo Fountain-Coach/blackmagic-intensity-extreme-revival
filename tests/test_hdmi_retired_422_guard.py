@@ -20,7 +20,7 @@ CMOD_C=os.path.join(ROOT,"src","sierra-hdmi-color-control.c")
 
 
 def load_py(path):
-    namespace={"__name__":"retired_422_test_fixture"}
+    namespace={"__name__":"retired_422_test_fixture","__file__":path}
     if sys.version_info[0]<3:
         execfile(path,namespace)
     else:
@@ -64,8 +64,8 @@ class RetiredColorModes(unittest.TestCase):
 
     def test_old_restore_routes_through_new_auto_restore(self):
         src=read_file(CMOD_PY)
-        self.assertIn('RECOVERY="/tmp/fc-hdmi-ycbcr422-cyuv-bounded-trial.py"',src)
-        self.assertIn('return subprocess.call([sys.executable, RECOVERY, "--restore-only"])',src)
+        self.assertIn('CANONICAL=os.path.join(HERE,"hdmi-ycbcr422-cyuv-bounded-trial.py")',src)
+        self.assertIn('return subprocess.call([sys.executable,CANONICAL]+argv)',src)
         self.assertNotIn("IODisplaySetIntegerParameter(",src)
 
     def test_old_preflight_is_retired(self):
