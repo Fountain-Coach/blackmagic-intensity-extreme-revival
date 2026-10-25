@@ -110,18 +110,25 @@ int main(int argc,char**argv){
     if((argc!=4 && argc!=5) || strcmp(argv[1],"--mode") ||
        (strcmp(argv[2],"720p60") && strcmp(argv[2],"1080p25"))){
         fprintf(stderr,"usage: fountain-video-output --mode 720p60|1080p25"
-                " --eight-second-score | --seconds 5..120\n");
+                " --eight-second-score | --seconds 5..120 | --minutes 1..20\n");
         return 64;
     }
     int seconds=8;
     if(argc==4){
        if(strcmp(argv[3],"--eight-second-score"))return 64;
     }else{
-       if(strcmp(argv[3],"--seconds"))return 64;
        char* end=NULL;
        long requested=strtol(argv[4],&end,10);
-       if(!end || *end || requested<5 || requested>120)return 64;
-       seconds=(int)requested;
+       if(!end || *end)return 64;
+       if(!strcmp(argv[3],"--seconds")){
+           if(requested<5 || requested>120)return 64;
+           seconds=(int)requested;
+       }else if(!strcmp(argv[3],"--minutes")){
+           // A creative display needs uninterrupted playout. Limit every
+           // unattended hardware lease to at most twenty minutes.
+           if(requested<1 || requested>20)return 64;
+           seconds=(int)requested*60;
+       }else return 64;
     }
     if(!original_sierra()){
         puts("stage=hardware_guard result=WRONG_ORIGINAL_HOST");
