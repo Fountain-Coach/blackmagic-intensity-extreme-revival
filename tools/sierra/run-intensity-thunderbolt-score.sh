@@ -20,5 +20,6 @@ DEST=/tmp
 cp "$ROOT/tools/sierra/intensity-thunderbolt-score.py" "$DEST/fc-intensity-thunderbolt-score-20261025.py"
 cp "$ROOT/tools/sierra/intensity-thunderbolt-score.html" "$DEST/fc-intensity-thunderbolt-score-20261025.html"
 clang++ -std=c++11 -O0 -Wall -Wextra "$ROOT/src/decklink-hdmi-sink-status.cpp" -framework CoreFoundation -o "$DEST/fc-intensity-status-readonly-20261025"
+clang -std=c99 -O0 -Wall -Wextra -Werror "$ROOT/tools/sierra/intensity-audio-score.c" -framework AudioToolbox -framework CoreAudio -framework CoreFoundation -o "$DEST/fc-intensity-audio-score"
 echo "SAFE_READ_ONLY_SCORE: open http://127.0.0.1:18743/ on the silver Mac"
 exec /usr/bin/python -u "$DEST/fc-intensity-thunderbolt-score-20261025.py"
