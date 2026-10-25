@@ -46,6 +46,8 @@ class A124StaticOutputTests(unittest.TestCase):
         self.assertEqual(result["vendor_binary_sha256"],
                          probe.ORIGINAL_SHA256)
         self.assertEqual(result["base_mode_target"], "0x1846e")
+        self.assertEqual(result["root_mode_target"], "0x103ce")
+        self.assertEqual(result["conversion_bits_target"], "0x32140")
         self.assertEqual(result["follow_up_target"], "0x32404")
         self.assertFalse(result["hdmi_phy_off_register_resolved"])
         self.assertFalse(result["live_hardware_access"])
