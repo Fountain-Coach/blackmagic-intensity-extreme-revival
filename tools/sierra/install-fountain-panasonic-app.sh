@@ -1,7 +1,7 @@
 #!/bin/sh
-# RETIRED 2026-10-25. A local process renamed the newly created app to
-# "Fountain Panasonic Show.app.disabled", and the bounded video output
-# program was subsequently made non-executable. Owner/provenance unknown.
+# RETIRED 2026-10-25. The owner's explicit stop instruction led to the authorized disabling of
+# "Fountain Panasonic Show.app" and the bounded HDMI playback executable.
+# Do not restore these without a new explicit owner instruction.
 # Do not reinstall this app or bypass the disabled executable.
 #
 # Full source-owned installer is retained in Git history for review.
