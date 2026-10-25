@@ -80,11 +80,30 @@ int main(void){
             size_t count=(size_t)width*(size_t)height*4u;
             uint8_t *pixels=(uint8_t*)malloc(count);
             if(!pixels)return 26;
-            glBindTexture(GL_TEXTURE_RECTANGLE_ARB,[frame textureName]);
+            // Syphon's interprocess IOSurface texture can be sampled as
+            // a render target; glGetTexImage is not a reliable IOSurface
+            // readback method on Sierra Intel HD3000.
+            while(glGetError()!=GL_NO_ERROR){}
+            GLuint fbo=0;
+            glGenFramebuffersEXT(1,&fbo);
+            glBindFramebufferEXT(GL_FRAMEBUFFER_EXT,fbo);
+            glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT,
+                GL_COLOR_ATTACHMENT0_EXT,GL_TEXTURE_RECTANGLE_ARB,
+                [frame textureName],0);
+            GLenum fbStatus=glCheckFramebufferStatusEXT(GL_FRAMEBUFFER_EXT);
+            if(fbStatus!=GL_FRAMEBUFFER_COMPLETE_EXT){
+                printf("stage=syphon_client result=incomplete_framebuffer"
+                       " fb_status=0x%x\n",(unsigned)fbStatus);
+                glBindFramebufferEXT(GL_FRAMEBUFFER_EXT,0);
+                glDeleteFramebuffersEXT(1,&fbo);
+                free(pixels);return 27;
+            }
+            glReadBuffer(GL_COLOR_ATTACHMENT0_EXT);
             glPixelStorei(GL_PACK_ALIGNMENT,1);
-            glGetTexImage(GL_TEXTURE_RECTANGLE_ARB,0,GL_RGBA,
-                          GL_UNSIGNED_BYTE,pixels);
+            glReadPixels(0,0,width,height,GL_RGBA,GL_UNSIGNED_BYTE,pixels);
             GLenum err=glGetError();
+            glBindFramebufferEXT(GL_FRAMEBUFFER_EXT,0);
+            glDeleteFramebuffersEXT(1,&fbo);
             if(err!=GL_NO_ERROR){
                 printf("stage=syphon_client result=readback_failed"
                        " gl_error=0x%x\n",(unsigned)err);
