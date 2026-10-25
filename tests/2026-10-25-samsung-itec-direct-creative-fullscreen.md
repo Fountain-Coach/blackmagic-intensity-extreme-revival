@@ -80,3 +80,18 @@ The visual instrument is a direct Mac display application, not the pending indep
 | Blackmagic output lock preserved; hardware idle | PASS |
 | Optical confirmation from Samsung's physical display | **AWAITING OWNER OBSERVATION** |
 | Independent Blackmagic HDMI output/capture driver | **NOT IMPLEMENTED / SEPARATE** |
+
+## Later black-screen observation and read-only input diagnostics (08:34–08:55)
+
+**Owner's physical observation:** the Samsung remains **BLACK**, with Die Maschine closed and CPU-intensive photolibraryd temporarily suspended. A Sierra WindowServer screenshot is not a monitor-side image witness; the previous successful fullscreen claims are only host window/synthetic Syphon acceptance. The old i-tec direct-display attempt has **NOT PASSED optical acceptance**.
+
+- The actual Samsung `U28E590` EDID resolves to Intel `AppleIntelFramebuffer@1`, monitor vendor 19501, product 3148, serial 810375238. I/O Registry exposes one associated I2C bus.
+- The main display is marked online, active and awake by macOS. The persistent 1920×1080 60Hz mode is accepted. Those properties prove host-side enumeration, NOT that the HDMI picture appears.
+- The original Blackmagic OUTPUT_DISABLED lock remains present. FountainVideoInstrument is stopped. Silver Mac display was not rebooted, nor was Blackmagic output restarted.
+- Source-owned [Samsung DDC input-source probe](../tools/sierra/samsung-ddc-vcp-readonly.c) compiled on original Sierra. It uses single-shot GET VCP `0x60`, **without monitor-setting writes**, matched to exact Samsung PCI framebuffer/EDID.
+- Apple's I2C API returned `0x0` and 11 reply bytes but **the reply did not pass DDC/CI frame/checksum validation**. A simple-I2C reply and the framebuffer-advertised DDC-CI reply type both produced invalid, differing response bytes. Current physical input selection could **NOT** be determined; do **not** report HDMI 1 or HDMI 2 and do not issue a guessed SET VCP command.
+- The Samsung U28E590D manual describes automatic or manual source detection and distinct HDMI 1, HDMI 2 and DisplayPort selections. An EDID exchange does **not** prove which source its screen is actually displaying.
+
+**Next hardware isolation, only by explicitly requested cable movement:** bypass the i-tec output entirely by temporarily unplugging the cable from the silver Mac HDMI OUT to Blackmagic HDMI IN **at the Mac end only**, and moving the Samsung's HDMI cable from i-tec OUT to the now-free silver Mac HDMI OUT. The Blackmagic HDMI OUT must stay disconnected. Then read original Mac display enumeration and ask for an actual Samsung-side picture observation. If the direct connection also remains black, test Samsung's selected physical input/monitor behavior; if direct works, the i-tec/dock route is the failure boundary. This plug change has **not** occurred yet.
+
+No claim of Samsung optical success or a repaired screen until a user physical witness confirms it.
