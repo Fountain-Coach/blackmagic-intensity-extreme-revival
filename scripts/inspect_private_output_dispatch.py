@@ -21,9 +21,11 @@ LC_SYMTAB = 2
 VTABLE_PREFIX_BYTES = 16
 MODEL_NAME = "com_blackmagic_design_iokit_DeckLink_HardwareAbstractionDeckLink"
 HD = MODEL_NAME + "HDProPCIExpress"
+ROOT_HD = MODEL_NAME + "HD"
 EXTREME = MODEL_NAME + "HDExtreme"
 PREFIX = "__ZTV"
 HD_VTABLE = PREFIX + str(len(HD)) + HD
+ROOT_HD_VTABLE = PREFIX + str(len(ROOT_HD)) + ROOT_HD
 EXTREME_VTABLE = PREFIX + str(len(EXTREME)) + EXTREME
 
 HD_BASE_MODE = (
@@ -33,6 +35,14 @@ HD_BASE_MODE = (
 EXTREME_MODE = (
     "__ZN73com_blackmagic_design_iokit_DeckLink_"
     "HardwareAbstractionDeckLinkHDExtreme18SetVideoOutputModeEj"
+)
+ROOT_BASE_MODE = (
+    "__ZN64com_blackmagic_design_iokit_DeckLink_"
+    "HardwareAbstractionDeckLink18SetVideoOutputModeEj"
+)
+EXTREME_CONVERSION = (
+    "__ZN73com_blackmagic_design_iokit_DeckLink_"
+    "HardwareAbstractionDeckLinkHDExtreme30WriteVideoOutputConversionBitsEv"
 )
 EXTREME_3D = (
     "__ZN73com_blackmagic_design_iokit_DeckLink_"
@@ -80,8 +90,9 @@ def all_symbols(data: bytes) -> dict[str, int]:
     if stroff + strsize > len(data):
         raise ValueError("invalid string table")
     names = data[stroff:stroff + strsize]
-    wanted = {HD_VTABLE, EXTREME_VTABLE, HD_BASE_MODE, EXTREME_MODE,
-              EXTREME_3D, EXTREME_EDID, EXTREME_SINK}
+    wanted = {HD_VTABLE, ROOT_HD_VTABLE, EXTREME_VTABLE,
+              ROOT_BASE_MODE, HD_BASE_MODE, EXTREME_MODE,
+              EXTREME_CONVERSION, EXTREME_3D, EXTREME_EDID, EXTREME_SINK}
     result = {}
     for i in range(nsyms):
         string_offset, _, _, _, addr = struct.unpack_from(
@@ -111,8 +122,10 @@ def evaluate(data: bytes) -> dict:
     if digest != ORIGINAL_SHA256:
         raise ValueError("unsupported or changed vendor driver SHA-256")
     syms = all_symbols(data)
-    for name in (HD_VTABLE, EXTREME_VTABLE, HD_BASE_MODE,
-                 EXTREME_MODE, EXTREME_3D, EXTREME_EDID, EXTREME_SINK):
+    for name in (HD_VTABLE, ROOT_HD_VTABLE, EXTREME_VTABLE,
+                 ROOT_BASE_MODE, HD_BASE_MODE, EXTREME_MODE,
+                 EXTREME_CONVERSION, EXTREME_3D, EXTREME_EDID,
+                 EXTREME_SINK):
         if name not in syms:
             raise ValueError("required A124 symbol missing: " + name)
     # In original HDExtreme::SetVideoOutputMode disassembly:
@@ -121,6 +134,17 @@ def evaluate(data: bytes) -> dict:
     base_target = pointer(data, syms[HD_VTABLE] + 0x280)
     if base_target != syms[HD_BASE_MODE]:
         raise ValueError("unexpected SetVideoOutputMode base target")
+    # HDPro::SetVideoOutputMode calls through raw HD vtable + 0x280.
+    root_target = pointer(data, syms[ROOT_HD_VTABLE] + 0x280)
+    if root_target != syms[ROOT_BASE_MODE]:
+        raise ValueError("unexpected root output-mode target")
+    # HDPro then dispatches through the object's vtable address point
+    # + 0x7d8, selecting A124's conversion-bits implementation.
+    conversion_target = pointer(
+        data, syms[EXTREME_VTABLE] + VTABLE_PREFIX_BYTES + 0x7D8
+    )
+    if conversion_target != syms[EXTREME_CONVERSION]:
+        raise ValueError("unexpected model-specific conversion target")
     # Tail jump at HDExtreme::SetVideoOutputMode + 0x68:
     # jmpq *0x810(%rax), rax = this->vptr (address point + 16).
     follow_target = pointer(
@@ -140,6 +164,10 @@ def evaluate(data: bytes) -> dict:
         "mode_entry": hex(syms[EXTREME_MODE]),
         "base_mode_target": hex(base_target),
         "base_mode_name": "HDPro::SetVideoOutputMode",
+        "root_mode_target": hex(root_target),
+        "root_mode_name": "DeckLink::SetVideoOutputMode",
+        "conversion_bits_target": hex(conversion_target),
+        "conversion_bits_name": "HDExtreme::WriteVideoOutputConversionBits",
         "follow_up_target": hex(follow_target),
         "follow_up_name": "HDExtreme::AutoSwitch3DPackingFormat",
         "edid_reader": hex(syms[EXTREME_EDID]),
