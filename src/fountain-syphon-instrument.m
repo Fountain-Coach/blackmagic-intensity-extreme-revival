@@ -124,12 +124,22 @@ enum { kWidth=960, kHeight=540, kFramesPerSecond=25 };
     }
     self.lastCRC=fc_video_score_crc(self.pixels,(size_t)kWidth*kHeight*4);
     [self.context makeCurrentContext];
+    GLenum prior=glGetError();
+    if(prior!=GL_NO_ERROR){
+        printf("stage=syphon prior_gl_error=0x%x frame=%u\n",
+               (unsigned)prior,(unsigned)self.frame);
+        fflush(stdout);
+    }
     glBindTexture(GL_TEXTURE_RECTANGLE_ARB,self.texture);
+    GLenum bindError=glGetError();
     glPixelStorei(GL_UNPACK_ALIGNMENT,1);
     glTexSubImage2D(GL_TEXTURE_RECTANGLE_ARB,0,0,0,kWidth,kHeight,
                     GL_RGBA,GL_UNSIGNED_BYTE,self.pixels);
-    if(glGetError()!=GL_NO_ERROR){
-        puts("stage=syphon result=texture_upload_failed");
+    GLenum updateError=glGetError();
+    if(bindError!=GL_NO_ERROR || updateError!=GL_NO_ERROR){
+        printf("stage=syphon result=texture_upload_failed"
+               " frame=%u bind_error=0x%x upload_error=0x%x\n",
+               (unsigned)self.frame,(unsigned)bindError,(unsigned)updateError);
         fflush(stdout);
         [NSApp terminate:nil];
         return;
