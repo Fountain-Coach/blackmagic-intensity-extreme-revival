@@ -1,41 +1,46 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""Retired Sierra cmod-based HDMI 4:2:2 experiment.
+"""Retired legacy cmod colour trial — safe compatibility entrypoint.
 
-The original script attempted to set cmod, which is the *reported selected
-colour*, not a supported user-controlled 422 output setting. The actual
-cyuv request was later observed to select RGB via Apple IOGraphics 515.x.
+On Sierra IOGraphics 515.x the selected cmod property is not the write
+surface, and nonautomatic cyuv requests select RGB, not YCbCr 4:2:2.
 
-This compatibility command refuses all experiments. It preserves only a
-delegation to the current tested cyuv=automatic restoration command.
-Source and hardware are never modified by the blocked routes.
+No HDMI modes, pixel colour, DeckLink streams, PCI or firmware changes.
+The only supported restoration path is the adjacent source-owned cyuv
+controller's --restore-only action, which restores original cyuv=auto.
+The legacy watchdog and 4:2:2 test are permanently blocked.
 """
 from __future__ import print_function
 import os
 import subprocess
 import sys
 
-RECOVERY="/tmp/fc-hdmi-ycbcr422-cyuv-bounded-trial.py"
+HERE=os.path.dirname(os.path.abspath(__file__))
+CANONICAL=os.path.join(HERE,"hdmi-ycbcr422-cyuv-bounded-trial.py")
 
 
 def run_trial():
+    """Retired: never change source colour from this entrypoint."""
     raise RuntimeError("IOGraphics_RGB_rewrite_blocks_422_trials")
 
 
 def main(argv):
-    if argv==["--restore-only"]:
-        if not os.path.isfile(RECOVERY):
-            print("stage=legacy_cmod result=BLOCKED missing_safe_recovery")
-            return 65
-        return subprocess.call([sys.executable, RECOVERY, "--restore-only"])
-    if argv in (["--trial-422"],["--preflight"]) or (
-            len(argv)>0 and argv[0]=="--watchdog"):
-        print("stage=legacy_cmod result=BLOCKED_RETIRED_CMOD_EXPERIMENT"
+    if argv==["--trial-422"]:
+        print("stage=color_trial result=BLOCKED_IOGRAPHICS_RGB_REWRITE"
               " no_source_change=1 no_vendor_calls=1"
-              " recovery_via=hdmi-ycbcr422-cyuv-bounded-trial.py")
+              " restore_only_remains_available=1")
         return 65
-    print("usage: --restore-only (delegated safe cyuv automatic restoration);"
-          " all cmod experiments retired")
+    if len(argv)>=1 and argv[0]=="--watchdog":
+        print("stage=legacy_color_watchdog result=BLOCKED_RETIRED_CMOD_PATH"
+              " no_io=1")
+        return 65
+    if argv==["--restore-only"] or argv==["--preflight"]:
+        if not os.path.isfile(CANONICAL):
+            print("stage=legacy_color_route result=CANONICAL_CYUV_HELPER_MISSING")
+            return 66
+        return subprocess.call([sys.executable,CANONICAL]+argv)
+    print("usage: --preflight|--restore-only|--trial-422 (disabled)"
+          "|--watchdog (disabled)")
     return 64
 
 
