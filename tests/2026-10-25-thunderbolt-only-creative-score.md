@@ -26,7 +26,7 @@ Original `src/decklink-hdmi-sink-status.cpp` was compiled and run **read-only**:
 - no output state changes or unsafe `GetBytes` calls.
 
 ## Creative software
-- `tools/sierra/intensity-thunderbolt-score.py`: Sierra Python 2.7 local-only server, bounded at ten minutes; checks exact PCI vendor/device, PCI tunneling, original `OUTPUT_DISABLED` guard and live DeckLink status.
+- `tools/sierra/intensity-thunderbolt-score.py`: Sierra Python 2.7 local-only server, bounded at one hour; checks exact PCI vendor/device, PCI tunneling, original `OUTPUT_DISABLED` guard and live DeckLink status.
 - `tools/sierra/intensity-thunderbolt-score.html`: source-owned Die Maschine composition, animated slowly by Mac software, geometry seeded by *genuinely read* device status. Optional muted-by-default audio oscillator is also Mac-generated; no sound/video is claimed to come off the device's HDMI ports.
 - `tools/sierra/run-intensity-thunderbolt-score.sh`: guarded, manual launcher. Compiles the existing safe status probe; does not install a service, start at boot or activate the Blackmagic media engine.
 
@@ -52,6 +52,6 @@ On the original Sierra Mac, with the existing `OUTPUT_DISABLED` marker intact an
 sh tools/sierra/run-intensity-thunderbolt-score.sh
 ```
 
-In that Mac's Safari, open `http://127.0.0.1:18743/`. The page offers Freeze, optional local sound and Stop. The server is bound to loopback and terminates after at most ten minutes. No GitHub CI or driver installation is involved.
+In that Mac's Safari, open `http://127.0.0.1:18743/`. The page offers Freeze, optional local sound and Stop. The server is bound to loopback and terminates after at most one hour. No GitHub CI or driver installation is involved.
 
 This is a **creative, hardware-grounded read-only experiment**; the separate independent A124 driver programme remains distinct.
