@@ -22,6 +22,17 @@ read_log(){
  if [ -r "$LOG" ];then tail -n 7 "$LOG";fi
 }
 [ $# -eq 1 ] || usage
+# Respect local host decisions. We do not know which local process disabled
+# this application and removed execute permission from the HDMI adapter.
+DISABLED_APP="$HOME/Applications/Fountain Panasonic Show.app.disabled"
+DISABLED_AGENT="$HOME/Library/LaunchAgents/coach.fountain.video.panasonic.plist.disabled"
+OUTPUT="$BASE/bin/fountain-video-output"
+if [ -e "$DISABLED_APP" ] || [ -e "$DISABLED_AGENT" ] ||
+   { [ -f "$OUTPUT" ] && [ ! -x "$OUTPUT" ]; }; then
+  echo "stage=show result=BLOCKED_LOCAL_RUNTIME_DISABLED"
+  echo "stage=show reenable_attempted=0"
+  exit 65
+fi
 case "$1" in
  start)
   [ -x "$EXEC" ] || { echo "stage=show result=NO_OWNED_APP";exit 20; }
