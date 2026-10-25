@@ -20,7 +20,7 @@ PROBE = "/tmp/fc-intensity-status-readonly-20261025"
 HTML = "/tmp/fc-intensity-thunderbolt-score-20261025.html"
 OUTPUT_LOCK = os.path.expanduser("~/Library/Application Support/Fountain Coach/Video Instrument/run/OUTPUT_DISABLED")
 started = time.time()
-deadline = started + 600
+deadline = started + 3600
 sample_count = 0
 
 def execute(argv):
