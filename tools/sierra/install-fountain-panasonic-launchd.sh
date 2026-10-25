@@ -2,8 +2,8 @@
 # RETIRED 2026-10-25.
 #
 # During a real Panasonic show on the original Sierra Mac, the launch agent
-# coach.fountain.video.panasonic was renamed to .plist.disabled by an
-# unverified local actor/process. The running service then received SIGTERM.
+# coach.fountain.video.panasonic was unloaded and renamed to .plist.disabled by the authorized
+# agent following the owner's explicit instruction to stop the cycling. The running service then received SIGTERM.
 # The source-owned application must NOT override that local disablement.
 #
 # Historical installer and launchd program are preserved in Git history.
