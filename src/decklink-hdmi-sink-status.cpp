@@ -78,26 +78,91 @@ int main(void){
  rc=((GetInt)(*(void***)status)[4])(status,0x63766f6d,&mode);
  printf("stage=hdmi_sink_status output_mode_status=0x%08x output_mode=0x%08x\n",
         (unsigned)rc,(unsigned)(uint32_t)mode);
- uint8_t edid[1024]={0};
- uint32_t size=sizeof(edid);
- rc=((GetBytes)(*(void***)status)[7])(status,0x65646964u,edid,&size);
- printf("stage=hdmi_sink_status received_edid_rc=0x%08x bytes=%u\n",
-        (unsigned)rc,(unsigned)size);
- if(!rc && edid_valid(edid,size)){
-   unsigned vendor=(unsigned)edid[8]*256u+(unsigned)edid[9];
-   unsigned product=(unsigned)edid[10]+256u*(unsigned)edid[11];
-   char name[4]={0};
-   name[0]=(char)('A'+((vendor>>10)&31)-1);
-   name[1]=(char)('A'+((vendor>>5)&31)-1);
-   name[2]=(char)('A'+(vendor&31)-1);
-   printf("stage=hdmi_sink_status result=RECEIVED_VALID_SINK_EDID"
-          " manufacturer=%s product=0x%04x extensions=%u"
-          " panasonic_if_manufacturer_means_PAN=UNVERIFIED"
-          " image_pixels=NOT_VERIFIED\n",
-          name,product,(unsigned)edid[126]);
+ /* 10.4 status returns E_OUTOFMEMORY and required size 4096 for a
+    1024-byte buffer. Ask the runtime for its required capacity without
+    assuming the number of valid EDID blocks equals that capacity. */
+ uint32_t required=0;
+ int32_t size_rc=((GetBytes)(*(void***)status)[7])(
+     status,0x65646964u,NULL,&required);
+ printf("stage=hdmi_sink_status edid_size_query_rc=0x%08x required=%u\n",
+        (unsigned)size_rc,(unsigned)required);
+ uint8_t *edid=NULL;
+ if(required>=128 && required<=65536){
+    edid=(uint8_t*)calloc((size_t)required,1u);
+ }
+ if(!edid){
+    printf("stage=hdmi_sink_status result=NO_SAFE_EDID_BUFFER"
+           " required=%u panasonic_presence=UNKNOWN\n",(unsigned)required);
  }else{
-   printf("stage=hdmi_sink_status result=NO_VALID_EDID_READ"
-          " rc=0x%08x panasonic_presence=UNKNOWN\n",(unsigned)rc);
+    uint32_t returned=required;
+    rc=((GetBytes)(*(void***)status)[7])(
+       status,0x65646964u,edid,&returned);
+    printf("stage=hdmi_sink_status edid_read_rc=0x%08x"
+           " capacity=%u returned=%u\n",
+           (unsigned)rc,(unsigned)required,(unsigned)returned);
+    size_t actualBlocks=0u;
+    if(!rc && returned>=128u &&
+       !memcmp(edid,"\x00\xff\xff\xff\xff\xff\xff\x00",8)){
+      actualBlocks=(size_t)edid[126]+1u;
+      if(actualBlocks>(size_t)returned/128u || actualBlocks>8u)
+         actualBlocks=0u;
+    }
+    const size_t validLength=actualBlocks*128u;
+    if(!rc && validLength && edid_valid(edid,validLength)){
+        unsigned vendor=((unsigned)edid[8]<<8)|(unsigned)edid[9];
+        unsigned product=(unsigned)edid[10]|((unsigned)edid[11]<<8);
+        char name[4]={0};
+        name[0]=(char)('A'+((vendor>>10)&31)-1);
+        name[1]=(char)('A'+((vendor>>5)&31)-1);
+        name[2]=(char)('A'+(vendor&31)-1);
+        printf("stage=hdmi_sink_status result=RECEIVED_VALID_SINK_EDID"
+               " manufacturer=%s product=0x%04x extensions=%u"
+               " valid_edid_bytes=%lu physical_pixels=UNVERIFIED\n",
+               name,product,(unsigned)edid[126],(unsigned long)validLength);
+        for(size_t desc=54u;desc+18u<=126u;desc+=18u){
+            if(edid[desc] || edid[desc+1] || edid[desc+2])continue;
+            if(edid[desc+3]==0xfcu){
+               char display[14]={0};
+               for(size_t i=0;i<13u;i++){
+                   const unsigned char c=edid[desc+5u+i];
+                   if(c=='\n'||c=='\r'||c==0)break;
+                   display[i]=(c>=32&&c<127)?(char)c:'?';
+               }
+               printf("stage=hdmi_sink_status edid_display_name=%s\n",display);
+            }
+        }
+        for(size_t ext=1;ext<actualBlocks;ext++){
+           const uint8_t* p=edid+ext*128u;
+           if(p[0]!=0x02u)continue;
+           size_t end=(size_t)p[2];
+           if(end<4u||end>127u)continue;
+           printf("stage=hdmi_sink_status cta_revision=%u"
+                  " supports_422=%u supports_444=%u\n",
+                  (unsigned)p[1],(unsigned)((p[3]>>4)&1),
+                  (unsigned)((p[3]>>5)&1));
+           size_t at=4u;
+           while(at<end){
+             unsigned tag=p[at]>>5,n=p[at]&31u;
+             if(at+1u+(size_t)n>end)break;
+             if(tag==2){
+                 for(unsigned j=0;j<n;j++){
+                    printf("stage=hdmi_sink_status cta_video_vic=%u native=%u\n",
+                           (unsigned)(p[at+1u+j]&127u),
+                           (unsigned)(p[at+1u+j]>>7));
+                 }
+             }
+             at+=1u+(size_t)n;
+           }
+        }
+    }else{
+        printf("stage=hdmi_sink_status result=NO_VALID_EDID_READ"
+               " rc=0x%08x returned=%u"
+               " first_eight=", (unsigned)rc,(unsigned)returned);
+        for(size_t j=0;j<8u && j<(size_t)required;j++)
+            printf("%02x",(unsigned)edid[j]);
+        puts(" panasonic_presence=UNKNOWN");
+    }
+    free(edid);
  }
  puts("stage=hdmi_sink_status no_hardware_changes=1"
       " vendor_capture_calls=0 vendor_output_calls=0"
