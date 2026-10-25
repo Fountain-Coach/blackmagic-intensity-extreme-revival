@@ -115,6 +115,12 @@ if [ -x "$PREFIX/bin/fountain-video-output" ]; then
    cp "$PREFIX/bin/fountain-video-output" "$PREFIX/tmp/fountain-video-output.last-good.$(date +%Y%m%d%H%M%S)"
 fi
 mv -f "$STAGE/fountain-video-output" "$PREFIX/bin/fountain-video-output"
+# Owner's explicit physical-output stop survives a later reinstall.
+# Never restore execute permission if the safety lock file remains.
+if [ -f "$PREFIX/run/OUTPUT_DISABLED" ];then
+   chmod 0644 "$PREFIX/bin/fountain-video-output"
+   echo "install=hardware_output_BLOCKED_BY_OWNER_STOP"
+fi
 sh -n "$ROOT/tools/sierra/fountain-panasonic-show.sh"
 cp "$ROOT/tools/sierra/fountain-panasonic-show.sh" "$PREFIX/bin/fountain-panasonic-show.sh"
 chmod 755 "$PREFIX/bin/fountain-panasonic-show.sh"
