@@ -98,7 +98,8 @@ static int device_owned_and_idle(void* device){
    return 1;
 }
 static volatile sig_atomic_t stop_requested=0;
-static void stop_handler(int x){(void)x;stop_requested=1;}
+static volatile sig_atomic_t stop_signal=0;
+static void stop_handler(int x){stop_signal=x;stop_requested=1;}
 static void release_obj(void* p){
     if(p)((Release)(*(void***)p)[2])(p);
 }
@@ -216,10 +217,15 @@ int main(int argc,char**argv){
             const double remain=expected-now_seconds();
             if(remain>0 && remain<1.0)usleep((useconds_t)(remain*1000000));
         }
+        if(stop_requested && submitted<total && status==0){
+            status=stop_signal==SIGTERM?143:130;
+        }
         printf("stage=physical_score result=%s mode=%s"
-               " submitted=%d attempted=%d generated_poses=%d"
-               " elapsed_s=%.3f hdmi_wire_image=UNVERIFIED\n",
-               status?"FAILED":"DONE",argv[2],submitted,total,unique_updates,
+               " submitted=%d requested=%d generated_poses=%d"
+               " interrupt_signal=%d elapsed_s=%.3f"
+               " hdmi_wire_image=UNVERIFIED\n",
+               status==0?"DONE":stop_requested?"INTERRUPTED":"FAILED",
+               argv[2],submitted,total,unique_updates,(int)stop_signal,
                now_seconds()-start);
         fflush(stdout);
     }
