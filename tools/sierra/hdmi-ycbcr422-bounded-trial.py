@@ -34,7 +34,10 @@ def main(argv):
         print("stage=legacy_color_watchdog result=BLOCKED_RETIRED_CMOD_PATH"
               " no_io=1")
         return 65
-    if argv==["--restore-only"] or argv==["--preflight"]:
+    if argv==["--preflight"]:
+        print("stage=legacy_color_preflight result=BLOCKED_RETIRED_CMOD_PATH no_io=1")
+        return 65
+    if argv==["--restore-only"]:
         if not os.path.isfile(CANONICAL):
             print("stage=legacy_color_route result=CANONICAL_CYUV_HELPER_MISSING")
             return 66
