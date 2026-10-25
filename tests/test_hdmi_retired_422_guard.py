@@ -19,8 +19,9 @@ CYUV_C=os.path.join(ROOT,"src","sierra-hdmi-connection-color-control.c")
 CMOD_C=os.path.join(ROOT,"src","sierra-hdmi-color-control.c")
 
 
-def load_py(path):
-    namespace={"__name__":"retired_422_test_fixture","__file__":path}
+def load_py(path, virtual_path=None):
+    namespace={"__name__":"retired_422_test_fixture",
+               "__file__":virtual_path or path}
     if sys.version_info[0]<3:
         execfile(path,namespace)
     else:
@@ -118,6 +119,11 @@ class RetiredColorModes(unittest.TestCase):
         finally:
             ns["subprocess"].call=old_call
             ns["os"].path.isfile=old_exists
+
+    def test_known_sierra_fc_prefix_uses_original_restoration_command(self):
+        ns=load_py(CMOD_PY,"/tmp/fc-hdmi-ycbcr422-bounded-trial.py")
+        self.assertEqual(ns["CANONICAL"],
+                         "/tmp/fc-hdmi-ycbcr422-cyuv-bounded-trial.py")
 
     def test_original_auto_and_rgb_fallback_are_distinct(self):
         self.assertNotEqual(0x10000000,0x10)
