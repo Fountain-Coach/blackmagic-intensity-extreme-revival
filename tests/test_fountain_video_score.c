@@ -30,6 +30,26 @@ static int test_basic(void){
     if(fc_video_score_uyvy(uyvy,ny-1,w,h,0)!=1)return 13;
     if(fc_video_score_rgba(rgba,nr,w-1,h,0)!=1)return 14;
     if(fc_video_score_rgba(NULL,nr,w,h,0)!=1)return 15;
+    /* Distinct cinematic movements must survive both pixel encodings. */
+    uint32_t movementCrc[4]={0}, movementYuv[4]={0};
+    for(int stage=0;stage<4;stage++){
+        uint32_t time=(uint32_t)stage*600u;
+        if(fc_video_score_rgba(rgba,nr,w,h,time))return 17;
+        if(fc_video_score_uyvy(uyvy,ny,w,h,time))return 18;
+        movementCrc[stage]=fc_video_score_crc(rgba,nr);
+        movementYuv[stage]=fc_video_score_crc(uyvy,ny);
+        for(int earlier=0;earlier<stage;earlier++){
+            if(movementCrc[stage]==movementCrc[earlier])return 19;
+            if(movementYuv[stage]==movementYuv[earlier])return 20;
+        }
+    }
+    printf("stage=video_score_movements result=PASS"
+           " modes=4 rgba=%08x,%08x,%08x,%08x"
+           " uyvy=%08x,%08x,%08x,%08x\n",
+           (unsigned)movementCrc[0],(unsigned)movementCrc[1],
+           (unsigned)movementCrc[2],(unsigned)movementCrc[3],
+           (unsigned)movementYuv[0],(unsigned)movementYuv[1],
+           (unsigned)movementYuv[2],(unsigned)movementYuv[3]);
     /* Every emitted RGBA sample is opaque by design. */
     for(size_t i=3;i<nr;i+=4)if(rgba[i]!=255)return 16;
     printf("stage=video_score_test result=PASS frames_differ=1"
