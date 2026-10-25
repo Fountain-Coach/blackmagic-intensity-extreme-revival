@@ -1,81 +1,82 @@
 #!/bin/sh
-# Fountain Coach — Panasonic Die Maschine video playout control.
-# No GUI scripting, external services, firmware writes, kext changes,
-# input-stream takeover, or driver update.
-# A bounded video show is started only on an authorized user request.
-# Copyright (c) Fountain Coach contributors, 2026. MIT.
+# Fountain Coach: show controls for an explicitly requested Panasonic session.
+# The bounded playback process belongs to Sierra's GUI launchd domain, not
+# an SSH/remote-command shell process group. No autostart or KeepAlive.
 set -eu
+LABEL=coach.fountain.video.panasonic
+SERVICE="gui/$(id -u)/$LABEL"
 BASE="$HOME/Library/Application Support/Fountain Coach/Video Instrument"
-BIN="$BASE/bin/fountain-video-output"
-RUN="$BASE/run"
-PIDFILE="$RUN/panasonic-die-maschine-show.pid"
-LOG="$RUN/panasonic-die-maschine-show.log"
+LOG="$BASE/run/panasonic-launchd.log"
+ERRORLOG="$BASE/run/panasonic-launchd-error.log"
 
 usage(){
- printf "usage: fountain-panasonic-show.sh start [minutes_1_to_20] | status | stop\n" >&2
+ echo "usage: fountain-panasonic-show.sh start|status|stop" >&2
  exit 64
 }
-live(){
- if [ ! -r "$PIDFILE" ];then return 1;fi
- pid=$(cat "$PIDFILE")
- case "$pid" in ''|*[!0-9]*)return 1;;esac
- if ! kill -0 "$pid" 2>/dev/null;then return 1;fi
- # Do not operate an unrelated process, even when a stale PID was reused.
- current=$(ps -p "$pid" -o command= 2>/dev/null || true)
- case "$current" in
-  *"/bin/fountain-video-output --mode 720p60 --minutes "*)return 0;;
-  *)return 1;;
- esac
+registered(){
+ launchctl print "$SERVICE" >/dev/null 2>&1
 }
-if [ $# -lt 1 ];then usage;fi
+running(){
+ registered || return 1
+ details=$(launchctl print "$SERVICE" 2>/dev/null)
+ printf "%s\n" "$details" | grep -q 'state = running'
+}
+tail_logs(){
+ if [ -f "$LOG" ];then tail -n 6 "$LOG";fi
+ if [ -s "$ERRORLOG" ];then
+   echo "stage=show stderr_present=1"
+   tail -n 3 "$ERRORLOG"
+ fi
+}
+[ $# -eq 1 ] || usage
 case "$1" in
  start)
-  if [ $# -gt 2 ];then usage;fi
-  if [ $# -eq 2 ];then minutes=$2;else minutes=20;fi
-  case "$minutes" in ''|*[!0-9]*)usage;;esac
-  if [ "$minutes" -lt 1 ] || [ "$minutes" -gt 20 ];then usage;fi
-  [ -x "$BIN" ] || { echo "stage=show result=NO_INSTALLED_HARDWARE_ADAPTER"; exit 20; }
-  mkdir -p "$RUN"
-  if live;then
-    echo "stage=show result=ALREADY_RUNNING pid=$pid"
+  if ! registered;then
+    echo "stage=show result=NOT_REGISTERED"
+    exit 20
+  fi
+  if running;then
+    echo "stage=show result=ALREADY_RUNNING max_minutes=20"
     exit 0
   fi
-  rm -f "$PIDFILE"
-  nohup "$BIN" --mode 720p60 --minutes "$minutes" > "$LOG" 2>&1 < /dev/null &
-  pid=$!
-  printf "%s\n" "$pid" > "$PIDFILE"
+  launchctl kickstart -p "$SERVICE"
   sleep 2
-  if ! live;then
-    echo "stage=show result=FAILED_START"
-    tail -n 15 "$LOG" || true
+  if ! running;then
+    echo "stage=show result=FAILED_TO_START"
+    tail_logs
     exit 21
   fi
-  echo "stage=show result=RUNNING pid=$pid max_minutes=$minutes mode=720p60"
-  tail -n 6 "$LOG"
+  echo "stage=show result=RUNNING lease=launchd max_minutes=20"
+  tail_logs
   ;;
  status)
-  if live;then
-    echo "stage=show result=RUNNING pid=$pid"
-    ps -p "$pid" -o pid=,etime=,command=
-    tail -n 4 "$LOG"
+  if running;then
+    echo "stage=show result=RUNNING lease=launchd max_minutes=20"
+    launchctl print "$SERVICE" | grep -E 'state = running|pid = |program = ' | head -n 8
+  elif registered;then
+    echo "stage=show result=NOT_RUNNING registered=1"
   else
-    echo "stage=show result=NOT_RUNNING"
-    if [ -r "$LOG" ];then tail -n 8 "$LOG";fi
+    echo "stage=show result=NOT_REGISTERED"
   fi
+  tail_logs
   ;;
  stop)
-  if live;then
-    kill -TERM "$pid"
-    echo "stage=show result=STOP_REQUESTED pid=$pid"
+  if ! registered;then
+    echo "stage=show result=NOT_REGISTERED"
+    exit 20
+  fi
+  if running;then
+    launchctl kill SIGTERM "$SERVICE"
+    echo "stage=show result=STOP_REQUESTED"
     sleep 2
-    if live;then
-      echo "stage=show result=STILL_STOPPING pid=$pid"
+    if running;then
+      echo "stage=show result=STILL_STOPPING"
       exit 22
     fi
     echo "stage=show result=STOPPED"
-    tail -n 5 "$LOG"
+    tail_logs
   else
-    echo "stage=show result=NO_ACTIVE_OWNED_SHOW"
+    echo "stage=show result=ALREADY_STOPPED"
   fi
   ;;
  *)usage;;
