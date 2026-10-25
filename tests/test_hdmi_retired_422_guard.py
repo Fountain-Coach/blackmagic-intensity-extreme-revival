@@ -99,6 +99,26 @@ class RetiredColorModes(unittest.TestCase):
         self.assertLess(gate,setter)
         self.assertIn('strcmp(argv[1],"--inspect")',src[main:gate])
 
+    def test_legacy_watchdog_is_disabled_before_any_io(self):
+        ns=load_py(CMOD_PY)
+        self.assertEqual(ns["main"](["--watchdog","lease","ready","audit"]),65)
+
+    def test_legacy_restore_dispatches_only_to_canonical_cyuv_helper(self):
+        ns=load_py(CMOD_PY)
+        calls=[]
+        old_call=ns["subprocess"].call
+        old_exists=ns["os"].path.isfile
+        try:
+            ns["subprocess"].call=lambda args: calls.append(args) or 0
+            ns["os"].path.isfile=lambda path: path==ns["CANONICAL"]
+            self.assertEqual(ns["main"](["--restore-only"]),0)
+            self.assertEqual(len(calls),1)
+            self.assertEqual(calls[0],[sys.executable,ns["CANONICAL"],
+                                       "--restore-only"])
+        finally:
+            ns["subprocess"].call=old_call
+            ns["os"].path.isfile=old_exists
+
     def test_original_auto_and_rgb_fallback_are_distinct(self):
         self.assertNotEqual(0x10000000,0x10)
         self.assertNotEqual(0x100,0x1)
