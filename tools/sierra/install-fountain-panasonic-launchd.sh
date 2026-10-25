@@ -16,7 +16,7 @@ case "$(sw_vers -productVersion)" in 10.12.*) ;; *)echo "stage=launchd result=WR
 [ "$(sysctl -n hw.model)" = "Macmini5,3" ] || {
   echo "stage=launchd result=WRONG_MAC";exit 21;
 }
-[ -x "$BIN" ] || {echo "stage=launchd result=NO_INSTALLED_ADAPTER";exit 22;}
+[ -x "$BIN" ] || { echo "stage=launchd result=NO_INSTALLED_ADAPTER"; exit 22; }
 mkdir -p "$HOME/Library/LaunchAgents" "$BASE/run"
 if [ -e "$PLIST" ];then
   echo "stage=launchd existing_plist=1 path=$PLIST"
