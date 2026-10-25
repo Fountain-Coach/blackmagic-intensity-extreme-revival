@@ -19,6 +19,8 @@
 #include <string.h>
 #include <sys/time.h>
 #include <sys/sysctl.h>
+#include <sys/stat.h>
+#include <errno.h>
 #include <unistd.h>
 #include "fountain-video-score.h"
 
@@ -130,6 +132,30 @@ int main(int argc,char**argv){
            if(requested<1 || requested>20)return 64;
            seconds=(int)requested*60;
        }else return 64;
+    }
+    // Hard owner stop: fail before loading the vendor API, regardless of
+    // stale launch jobs or later installer replacement. The owner can
+    // explicitly review this lock for future creative sessions.
+    {
+        const char* home=getenv("HOME");
+        if(!home || !*home){
+            puts("stage=output result=BLOCKED_NO_HOME_FAIL_CLOSED");
+            return 65;
+        }
+        char path[2048]={0};
+        int length=snprintf(path,sizeof(path),
+            "%s/Library/Application Support/Fountain Coach/Video Instrument/run/OUTPUT_DISABLED",
+            home);
+        if(length<=0 || (size_t)length>=sizeof(path)){
+            puts("stage=output result=BLOCKED_LOCK_PATH_FAIL_CLOSED");
+            return 65;
+        }
+        struct stat st;
+        if(stat(path,&st)==0 || errno!=ENOENT){
+            puts("stage=output result=BLOCKED_BY_OWNER_HARDWARE_STOP"
+                 " vendor_calls=0 frame_submissions=0");
+            return 65;
+        }
     }
     if(!original_sierra()){
         puts("stage=hardware_guard result=WRONG_ORIGINAL_HOST");
