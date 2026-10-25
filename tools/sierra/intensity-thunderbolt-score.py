@@ -84,7 +84,7 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def do_GET(self):
-        if self.path == "/":
+        if self.path == "/" or self.path.startswith("/?"):
             self.reply(200, "text/html; charset=utf-8", open(HTML, "rb").read())
         elif self.path == "/api/snapshot":
             self.reply(200, "application/json; charset=utf-8",
@@ -95,11 +95,57 @@ class Handler(BaseHTTPRequestHandler):
             self.reply(404, "text/plain", "Not found\n")
 
     def do_POST(self):
-        if self.path != "/stop":
+        origin = self.headers.get("Origin", "")
+        referer = self.headers.get("Referer", "")
+        allowed = "http://127.0.0.1:%d" % PORT
+        if (origin and origin != allowed) or (referer and not referer.startswith(allowed + "/")):
+            self.reply(403, "text/plain", "Cross-origin action refused.\n")
+            return
+        if self.path == "/stop":
+            self.server.running = False
+            self.reply(200, "text/plain", "Score stopped; no hardware state changed.\n")
+            return
+        modes = {"/api/audio/phonic": "--phonic",
+                 "/api/audio/blackmagic": "--blackmagic"}
+        if self.path not in modes:
             self.reply(404, "text/plain", "Not found\n")
             return
-        self.server.running = False
-        self.reply(200, "text/plain", "Score stopped; no hardware state changed.\n")
+        witness = snapshot()
+        if (not witness["pcie_tunnel"] or not witness["output_disabled_guard"] or
+                witness["output_flags"] != "0x00000000"):
+            self.reply(409, "application/json",
+                       json.dumps({"result": "REFUSED_HARDWARE_PREFLIGHT"}))
+            return
+        program = "/tmp/fc-intensity-audio-score"
+        if not os.path.isfile(program) or not os.access(program, os.X_OK):
+            self.reply(503, "application/json",
+                       json.dumps({"result": "NATIVE_AUDIO_PROGRAM_UNAVAILABLE"}))
+            return
+        route = modes[self.path]
+        env = os.environ.copy()
+        try:
+            child = subprocess.Popen(
+                ["/usr/bin/perl", "-e", "alarm 15; exec @ARGV", program, route],
+                env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            report = child.communicate()[0]
+            valid = (child.returncode == 0 and
+                     "returned_buffers=8" in report and
+                     "device_running_observed=1" in report and
+                     "stop_code=0" in report)
+        except Exception as err:
+            report = "NATIVE_AUDIO_EXECUTION_ERROR: %s" % str(err)
+            valid = False
+        result = {
+            "result": "COREAUDIO_COMPLETED" if valid else "COREAUDIO_NOT_ACCEPTED",
+            "route": route[2:],
+            "device_accepted_frames": valid,
+            "audible_hearing": "NOT_MACHINE_MEASURED",
+            "physical_blackmagic_port": "NOT_WITNESSED",
+            "sound_generated_by": "SILVER_MAC",
+            "report": report[-1200:],
+        }
+        self.reply(200 if valid else 503, "application/json",
+                   json.dumps(result, sort_keys=True))
 
 def main():
     if sys.platform != "darwin":
