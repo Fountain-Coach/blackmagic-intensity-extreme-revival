@@ -21,6 +21,12 @@ clang++ -std=c++11 -arch x86_64 -mmacosx-version-min=10.12 \
   -o "$stage/FCIntensityPCIDiagnostic.o"
 
 clang -arch x86_64 -mmacosx-version-min=10.12 \
+  -std=c99 -Wall -Wextra -Werror -DKERNEL -D__KERNEL__ \
+  -I "$headers" -I "$here/../../common" \
+  -c "$here/../../common/a124_safety.c" \
+  -o "$stage/a124_safety.o"
+
+clang -arch x86_64 -mmacosx-version-min=10.12 \
   -Wall -Wextra -Werror -DKERNEL -D__KERNEL__ \
   -isysroot "$sdk" -c "$here/FCIntensityKmodInfo.c" \
   -o "$stage/FCIntensityKmodInfo.o"
@@ -28,7 +34,7 @@ clang -arch x86_64 -mmacosx-version-min=10.12 \
 ld -kext -arch x86_64 -macosx_version_min 10.12 \
   -L "$sdk/usr/lib" \
   -o "$bundle/Contents/MacOS/FCIntensityPCIDiagnostic" \
-  "$stage/FCIntensityPCIDiagnostic.o" -lkmodc++ \
+  "$stage/FCIntensityPCIDiagnostic.o" "$stage/a124_safety.o" -lkmodc++ \
   "$stage/FCIntensityKmodInfo.o" -lkmod
 
 cp "$here/Info.plist" "$bundle/Contents/Info.plist"
