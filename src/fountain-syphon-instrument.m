@@ -35,6 +35,7 @@ enum { kWidth=960, kHeight=540, kFramesPerSecond=25 };
 @property (assign) uint32_t published;
 @property (assign) uint32_t lastCRC;
 @property (assign) NSUInteger maxFrames;
+@property (assign) BOOL fullscreen;
 @end
 
 @implementation FountainInstrument
@@ -53,17 +54,44 @@ enum { kWidth=960, kHeight=540, kFramesPerSecond=25 };
         [NSApp terminate:nil];
         return;
     }
-    NSRect rect=NSMakeRect(0,0,960,540);
+    /* A normal Cocoa/OpenGL screen, NOT a DeckLink/Intensity hardware
+     * output. The source-owned visual may fill the connected Samsung 4K
+     * monitor while the owner HDMI output lock remains untouched.
+     */
+    NSScreen *screen=[NSScreen mainScreen];
+    if(!screen) {
+        puts("stage=display result=no_cocoa_screen");
+        fflush(stdout);
+        [NSApp terminate:nil];
+        return;
+    }
+    NSRect rect=self.fullscreen ? [screen frame] : NSMakeRect(0,0,960,540);
+    NSWindowStyleMask style=self.fullscreen ? NSWindowStyleMaskBorderless :
+        (NSWindowStyleMaskTitled|NSWindowStyleMaskClosable|
+         NSWindowStyleMaskMiniaturizable);
     self.window=[[NSWindow alloc] initWithContentRect:rect
-        styleMask:(NSWindowStyleMaskTitled|NSWindowStyleMaskClosable|
-                   NSWindowStyleMaskMiniaturizable)
-        backing:NSBackingStoreBuffered defer:NO];
+        styleMask:style backing:NSBackingStoreBuffered defer:NO];
     [self.window setTitle:@"Fountain Video Instrument | Die Maschine"];
-    self.view=[[NSOpenGLView alloc] initWithFrame:rect pixelFormat:format];
+    [self.window setBackgroundColor:[NSColor blackColor]];
+    [self.window setOpaque:YES];
+    if(self.fullscreen) {
+        [self.window setHasShadow:NO];
+        [self.window setLevel:NSNormalWindowLevel];
+    }
+    self.view=[[NSOpenGLView alloc] initWithFrame:
+               NSMakeRect(0,0,rect.size.width,rect.size.height)
+               pixelFormat:format];
+    [self.view setAutoresizingMask:
+        (NSViewWidthSizable|NSViewHeightSizable)];
     [self.window setContentView:self.view];
     [self.window setDelegate:self];
-    [self.window center];
+    if(!self.fullscreen) [self.window center];
     [self.window makeKeyAndOrderFront:nil];
+    printf("stage=display result=window_created fullscreen=%d"
+           " window_size_points=%.0fx%.0f"
+           " hardware_output_calls=0 owner_stop_preserved=1\n",
+           (int)self.fullscreen,rect.size.width,rect.size.height);
+    fflush(stdout);
     [self.view prepareOpenGL];
     self.context=[self.view openGLContext];
     [self.context makeCurrentContext];
@@ -150,7 +178,28 @@ enum { kWidth=960, kHeight=540, kFramesPerSecond=25 };
           textureDimensions:NSMakeSize(kWidth,kHeight) flipped:YES];
     /* GPU preview via the same published OpenGL texture. */
     glBindFramebufferEXT(GL_FRAMEBUFFER_EXT,0);
-    glViewport(0,0,kWidth,kHeight);
+    /* AppKit view dimensions are in points, GL viewport is in physical
+     * backing pixels. Fit 16:9 source, letterbox if the screen differs.
+     * This keeps original Syphon publication at 960x540 and scales only
+     * this local Samsung preview; it does not create a second video path.
+     */
+    NSRect backing=[self.view convertRectToBacking:[self.view bounds]];
+    int viewW=(int)(backing.size.width+0.5);
+    int viewH=(int)(backing.size.height+0.5);
+    if(viewW<1||viewH<1){
+        puts("stage=display result=invalid_backing_dimensions");
+        fflush(stdout);
+        [NSApp terminate:nil];
+        return;
+    }
+    int fitW=viewW,fitH=(int)((long long)viewW*kHeight/kWidth);
+    if(fitH>viewH){
+        fitH=viewH;
+        fitW=(int)((long long)viewH*kWidth/kHeight);
+    }
+    glViewport((viewW-fitW)/2,(viewH-fitH)/2,fitW,fitH);
+    glClearColor(0,0,0,1);
+    glClear(GL_COLOR_BUFFER_BIT);
     glDisable(GL_DEPTH_TEST);
     glEnable(GL_TEXTURE_RECTANGLE_ARB);
     glMatrixMode(GL_PROJECTION); glLoadIdentity();
@@ -204,6 +253,7 @@ enum { kWidth=960, kHeight=540, kFramesPerSecond=25 };
 int main(int argc,const char *argv[]) {
     @autoreleasepool {
         NSUInteger frames=0;
+        BOOL fullscreen=NO;
         for(int i=1;i<argc;i++){
             if(!strcmp(argv[i],"--frames")&&i+1<argc){
                 char *end=NULL;
@@ -212,8 +262,11 @@ int main(int argc,const char *argv[]) {
                 frames=(NSUInteger)n;
             }else if(!strcmp(argv[i],"--live")){
                 frames=0;
+            }else if(!strcmp(argv[i],"--fullscreen")){
+                fullscreen=YES;
             }else {
-                puts("usage: FountainVideoInstrument --frames 125|--live");
+                puts("usage: FountainVideoInstrument"
+                     " --frames 125|--live [--fullscreen]");
                 return 64;
             }
         }
@@ -221,6 +274,7 @@ int main(int argc,const char *argv[]) {
         [app setActivationPolicy:NSApplicationActivationPolicyRegular];
         FountainInstrument *engine=[[FountainInstrument alloc] init];
         engine.maxFrames=frames;
+        engine.fullscreen=fullscreen;
         [app setDelegate:engine];
         printf("stage=instrument starting=1 max_frames=%lu"
                " independent_of_black_syphon_application=1\n",
