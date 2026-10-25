@@ -44,11 +44,21 @@ static double now_seconds(void){
     return (double)t.tv_sec+(double)t.tv_usec/1000000.0;
 }
 int main(int argc,char**argv){
-    if(argc!=4||strcmp(argv[1],"--mode")||
-       (strcmp(argv[2],"720p60")&&strcmp(argv[2],"1080p25"))||
-       strcmp(argv[3],"--eight-second-score")){
-        fprintf(stderr,"usage: fountain-video-output --mode 720p60|1080p25 --eight-second-score\n");
+    if((argc!=4 && argc!=5) || strcmp(argv[1],"--mode") ||
+       (strcmp(argv[2],"720p60") && strcmp(argv[2],"1080p25"))){
+        fprintf(stderr,"usage: fountain-video-output --mode 720p60|1080p25"
+                " --eight-second-score | --seconds 5..120\n");
         return 64;
+    }
+    int seconds=8;
+    if(argc==4){
+       if(strcmp(argv[3],"--eight-second-score"))return 64;
+    }else{
+       if(strcmp(argv[3],"--seconds"))return 64;
+       char* end=NULL;
+       long requested=strtol(argv[4],&end,10);
+       if(!end || *end || requested<5 || requested>120)return 64;
+       seconds=(int)requested;
     }
     const bool hd=(strcmp(argv[2],"720p60")!=0);
     const int width=hd?1920:1280,height=hd?1080:720,rate=hd?25:60;
@@ -96,7 +106,7 @@ int main(int argc,char**argv){
         rc=((GetBytes)(*(void***)frame)[8])(frame,&raw);
         if(rc||!raw){status=26;goto finish;}
         uint8_t* pixels=(uint8_t*)raw;
-        const int total=rate*8;
+        const int total=rate*seconds;
         const int update_interval=hd?3:6; // Animate at ~8-10 poses/sec
         uint32_t last_hash=0;
         int submitted=0,unique_updates=0;
