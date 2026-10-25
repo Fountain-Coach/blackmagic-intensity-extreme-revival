@@ -69,8 +69,8 @@ function modeText(hex){
 function poll(){
  if(stopped)return;
  api("GET","/api/snapshot",function(status,text){
-  if(status!==200){el("state","TELEMETRY UNAVAILABLE");return;}
-  try{latest=JSON.parse(text);}catch(e){el("state","INVALID DEVICE REPLY");return;}
+  if(status!==200){latest=null;mute();el("state","TELEMETRY UNAVAILABLE");return;}
+  try{latest=JSON.parse(text);}catch(e){latest=null;mute();el("state","INVALID DEVICE REPLY");return;}
   lastSuccess=Date.now();
   var connected=latest.pcie_tunnel===true;
   el("state",connected?"THUNDERBOLT / HARDWARE ONLINE":"HARDWARE NOT DETECTED");
