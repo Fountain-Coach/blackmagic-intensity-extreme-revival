@@ -17,6 +17,11 @@ import sys
 
 HERE=os.path.dirname(os.path.abspath(__file__))
 CANONICAL=os.path.join(HERE,"hdmi-ycbcr422-cyuv-bounded-trial.py")
+# The original Sierra diagnostics are installed under /tmp with an fc- prefix;
+# the repository stores matching scripts under tools/sierra without it.
+# Never search PATH or silently invoke a different program for restoration.
+if os.path.basename(os.path.abspath(__file__)).startswith("fc-"):
+    CANONICAL=os.path.join(HERE,"fc-hdmi-ycbcr422-cyuv-bounded-trial.py")
 
 
 def run_trial():
