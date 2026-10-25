@@ -104,11 +104,12 @@ int main(void){
     query.minReplyDelay=50000000u; /* bounded 50 ms quiet delay */
     query.replyAddress=0x6f;
     query.replySubAddress=0x51;
-    query.replyTransactionType=kIOI2CSimpleTransactionType;
+    query.replyTransactionType=kIOI2CDDCciReplyTransactionType;
     query.replyBuffer=(vm_address_t)reply;
     query.replyBytes=sizeof(reply);
     printf("stage=samsung_ddc request=GET_VCP_0x60"
-           " write_setting=NO retry=NO min_reply_delay_ns=50000000\n");
+           " write_setting=NO retry=NO min_reply_delay_ns=50000000"
+           " reply_type=DDC_CI\n");
     fflush(stdout);
     kr=IOI2CSendRequest(conn,kNilOptions,&query);
     kern_return_t close_rc=IOI2CInterfaceClose(conn,kNilOptions);
