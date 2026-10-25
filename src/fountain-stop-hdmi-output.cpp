@@ -139,6 +139,19 @@ int main(int argc,char**argv) {
             release_ref(cfg);release_ref(dev);dlclose(handle);
             return 28;
         }
+        // Some original 10.4 settings read back from hardware rather than
+        // a pending value; request the supported preferences commit once.
+        // This is an owner-requested permanent HDMI disable, not a test
+        // to re-enable or switch video modes.
+        rc=((Persist)(*(void***)cfg)[11])(cfg);
+        printf("stage=stop_hdmi commit_component_only_rc=0x%08x\n",
+               (unsigned)rc);
+        fflush(stdout);
+        if(rc){
+            puts("stage=stop_hdmi result=PREFERENCE_COMMIT_FAILED");
+            release_ref(cfg);release_ref(dev);dlclose(handle);
+            return 30;
+        }
     }
     int64_t after=-1,after_input=-1;
     int32_t readrc=config_int(cfg,OUTPUT_KEY,&after);
@@ -151,15 +164,6 @@ int main(int argc,char**argv) {
     if(readrc||inputrc||after!=SAFE_OUTPUT||after_input!=ORIGINAL_INPUT){
         puts("stage=stop_hdmi result=CHANGE_NOT_VERIFIED");
         release_ref(cfg);release_ref(dev);dlclose(handle);return 29;
-    }
-    if(output!=SAFE_OUTPUT){
-        rc=((Persist)(*(void***)cfg)[11])(cfg);
-        printf("stage=stop_hdmi save_to_preferences_rc=0x%08x\n",(unsigned)rc);
-        fflush(stdout);
-        if(rc){
-            puts("stage=stop_hdmi result=PERSISTENCE_NOT_CONFIRMED");
-            release_ref(cfg);release_ref(dev);dlclose(handle);return 30;
-        }
     }
     release_ref(cfg);
     cfg=NULL;
